@@ -72,4 +72,15 @@ describe("DesktopEnvironment", () => {
       assert.equal(production.stateDir, "/Users/alice/.t3/userdata");
     }),
   );
+
+  it.effect("applies Fork branding and bundle id while keeping userdata", () =>
+    Effect.gen(function* () {
+      const fork = yield* makeEnvironment({}, { T3CODE_DESKTOP_STAGE_LABEL: "Fork" });
+
+      assert.equal(fork.branding.stageLabel, "Fork");
+      assert.equal(fork.displayName, "T3 Code (Fork)");
+      assert.equal(fork.appUserModelId, "com.t3tools.t3code.fork");
+      assert.equal(fork.stateDir, "/Users/alice/.t3/userdata");
+    }),
+  );
 });

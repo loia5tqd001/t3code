@@ -90,9 +90,18 @@ const APP_BASE_NAME = "T3 Code";
 function resolveDesktopAppStageLabel(input: {
   readonly isDevelopment: boolean;
   readonly appVersion: string;
+  readonly stageLabelOverride?: Option.Option<string>;
 }): DesktopAppStageLabel {
   if (input.isDevelopment) {
     return "Dev";
+  }
+
+  if (
+    input.stageLabelOverride !== undefined &&
+    Option.isSome(input.stageLabelOverride) &&
+    input.stageLabelOverride.value.trim().toLowerCase() === "fork"
+  ) {
+    return "Fork";
   }
 
   return isNightlyDesktopVersion(input.appVersion) ? "Nightly" : "Beta";
@@ -101,6 +110,7 @@ function resolveDesktopAppStageLabel(input: {
 export function resolveDesktopAppBranding(input: {
   readonly isDevelopment: boolean;
   readonly appVersion: string;
+  readonly stageLabelOverride?: Option.Option<string>;
 }): DesktopAppBranding {
   const stageLabel = resolveDesktopAppStageLabel(input);
   return {
@@ -170,6 +180,7 @@ const make = Effect.fn("desktop.environment.make")(function* (
   const branding = resolveDesktopAppBranding({
     isDevelopment,
     appVersion: input.appVersion,
+    stageLabelOverride: config.appStageLabelOverride,
   });
   const displayName = branding.displayName;
   const stateDir = resolveDesktopStateDir({
@@ -228,7 +239,11 @@ const make = Effect.fn("desktop.environment.make")(function* (
     branding,
     displayName,
     appUserModelId: Option.getOrElse(config.appUserModelIdOverride, () =>
-      isDevelopment ? "com.t3tools.t3code.dev" : "com.t3tools.t3code",
+      isDevelopment
+        ? "com.t3tools.t3code.dev"
+        : branding.stageLabel === "Fork"
+          ? "com.t3tools.t3code.fork"
+          : "com.t3tools.t3code",
     ),
     linuxDesktopEntryName: resolveLinuxDesktopEntryName(isDevelopment),
     linuxApplicationsDir,

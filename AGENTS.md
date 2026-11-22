@@ -1,5 +1,14 @@
 # T3 Code
 
+## Personal Fork Rules (Read First)
+
+These local preferences apply to every conversation in this checkout and override any conflicting defaults below:
+
+- **Personal fork only (`origin` = `loia5tqd001/t3code`, branch `personal/local-fixes`).** Never push to `upstream` (`pingdotgg/t3code`) and never open upstream PRs.
+- **Commit and push every change to `origin`.** After finishing and verifying any code, script, or config change, commit with a concise conventional commit message and push to `origin personal/local-fixes` (unless the user explicitly asks not to commit/push). Never use `--no-verify`.
+- **Web and desktop only.** Skip mobile (`apps/mobile`) and marketing (`apps/marketing`) unless explicitly requested.
+- **Local built-fork workflow.** Use arm64 Node 26 (`$HOME/.local/share/vite-plus/js_runtime/node/26.13.1/bin:$HOME/.local/share/t3code-node26-arm64/bin`) for `vp`/`node`. Refresh UI-only edits with `./scripts/rebuild-local-fork.sh --web` (user presses `Cmd+Shift+R`), and server/desktop/contract edits with `./scripts/rebuild-local-fork.sh --full` (do not kill/relaunch the running app mid-turn unless asked).
+
 T3 Code is a minimal GUI for coding agents. A Node WebSocket server wraps provider CLIs and agents (Codex, Claude Code, Cursor, Grok, OpenCode, Antigravity, Kiro, Pi, Muse Code, fx) and serves web, desktop, and mobile clients.
 
 You can think of T3 Code as an open source "bring-your-own-subscription" alternative to apps like Claude Desktop, Codex App, Cursor Glass and Conductor.

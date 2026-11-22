@@ -13,6 +13,21 @@
       "command": "node scripts/setup-worktree.ts",
       "icon": "configure",
       "runOnWorktreeCreate": true
+    },
+    {
+      "name": "Rebuild Web UI",
+      "command": "./scripts/rebuild-local-fork.sh --web",
+      "icon": "build"
+    },
+    {
+      "name": "Rebuild & Relaunch",
+      "command": "./scripts/rebuild-local-fork.sh --full --relaunch",
+      "icon": "build"
+    },
+    {
+      "name": "Check Changed",
+      "command": "env PATH=\"$HOME/.local/share/vite-plus/js_runtime/node/26.13.1/bin:$HOME/.local/share/t3code-node26-arm64/bin:$PATH\" ./node_modules/.bin/vp run check:changed",
+      "icon": "test"
     }
   ]
 }

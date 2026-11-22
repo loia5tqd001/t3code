@@ -61,6 +61,7 @@ import * as McpInvocationContext from "./McpInvocationContext.ts";
 import * as McpSessionRegistry from "./McpSessionRegistry.ts";
 import * as OrchestratorMcpService from "./OrchestratorMcpService.ts";
 import * as PreviewAutomationBroker from "./PreviewAutomationBroker.ts";
+import { DeviceToolkit } from "./toolkits/device/tools.ts";
 import { OrchestratorToolkit } from "./toolkits/orchestrator/tools.ts";
 import { PreviewToolkit } from "./toolkits/preview/tools.ts";
 import { PreviewControlsToolkit } from "./toolkits/previewControls/tools.ts";
@@ -2147,6 +2148,154 @@ it.effect("lists optional tools to a deferring client only after tool_search loa
       ).toEqual({ tools: [{ name: "preview_open", description: "Opens a browser preview." }] });
       expect(yield* deferring.listed).toEqual(["delegate_task", "preview_open", "tool_search"]);
       expect(yield* other.listed).toEqual(["delegate_task", "preview_open", "schedule_task"]);
+    }),
+  ).pipe(Effect.provide(NodeHttpServer.layerTest)),
+);
+
+const capabilityTools = [
+  ...Object.values(PreviewToolkit.tools),
+  ...Object.values(PreviewControlsToolkit.tools),
+  ...Object.values(DeviceToolkit.tools),
+];
+const previewToolNames = Object.keys(PreviewToolkit.tools).sort();
+const previewControlsToolNames = Object.keys(PreviewControlsToolkit.tools).sort();
+const deviceToolNames = Object.keys(DeviceToolkit.tools).sort();
+const capabilityToolNames = capabilityTools.map((tool) => tool.name).sort();
+const CapabilityToolkit = Toolkit.make(...capabilityTools);
+
+const capabilityServerLayer = McpHttpServer.layerMcpTransport(
+  Layer.mergeAll(
+    McpHttpServer.toolkitRegistration(
+      CapabilityToolkit,
+      McpToolAccess.toLayer(CapabilityToolkit, {
+        ...Object.fromEntries(
+          capabilityToolNames.map((name) => [
+            name,
+            McpToolAccess.reads(() => Effect.succeed({})),
+          ]),
+        ),
+      }),
+    ),
+    McpHttpServer.layerToolSearch,
+  ),
+).pipe(
+  Layer.provide(ServerSettings.layerTest()),
+  Layer.provide(McpToolAccessTestkit.liveThreadsLayer),
+  Layer.provide(
+    Layer.mock(McpSessionRegistry.McpSessionRegistry)({
+      resolve: (token) =>
+        Effect.succeed({
+          environmentId,
+          requestNamespace: token,
+          thread: {
+            threadId: ThreadId.make(`thread-${token}`),
+            providerSessionId: token,
+            providerInstanceId: ProviderInstanceId.make("copilot"),
+          },
+          client: undefined,
+          capabilities: new Set(
+            token === "allCapabilities" ? (["preview", "device"] as const) : [],
+          ),
+          issuedAt: 1,
+        }),
+    }),
+  ),
+);
+
+it.effect.each([
+  ["hides preview and device tools without their capabilities", "noCapabilities", [], 0],
+  [
+    "lists preview and device tools with their capabilities",
+    "allCapabilities",
+    capabilityToolNames,
+    capabilityToolNames.length,
+  ],
+] as const)("%s", ([, token, expected, count]) =>
+  Effect.scoped(
+    Effect.gen(function* () {
+      yield* HttpRouter.serve(capabilityServerLayer, {
+        disableListenLog: true,
+        disableLogger: true,
+      }).pipe(Layer.build);
+      const httpClient = yield* HttpClient.HttpClient;
+      const headers = {
+        accept: "application/json, text/event-stream",
+        authorization: `Bearer ${token}`,
+        "t3-tool-exposure": "deferred",
+      };
+      const initialize = yield* httpClient.post("/mcp", {
+        headers,
+        body: HttpBody.text(
+          `{"jsonrpc":"2.0","id":1,"method":"initialize","params":{"protocolVersion":"2025-06-18","capabilities":{},"clientInfo":{"name":"probe","version":"1.0.0"}}}`,
+          "application/json",
+        ),
+      });
+      const rpc = (method: string, params: object) =>
+        httpClient
+          .post("/mcp", {
+            headers: {
+              ...headers,
+              "mcp-session-id": initialize.headers["mcp-session-id"]!,
+              "mcp-protocol-version": "2025-06-18",
+            },
+            body: HttpBody.text(
+              JSON.stringify({ jsonrpc: "2.0", id: 2, method, params }),
+              "application/json",
+            ),
+          })
+          .pipe(
+            Effect.flatMap((response) => response.text),
+            Effect.map((text): unknown =>
+              text
+                .split("\n")
+                .filter((line) => line.startsWith("data: ") || line.startsWith("{"))
+                .map((line) => JSON.parse(line.replace(/^data: /u, "")) as { id?: number })
+                .find((message) => message.id === 2),
+            ),
+          );
+      const listed = yield* rpc("tools/list", {}).pipe(
+        Effect.map((body) =>
+          (body as { result: { tools: ReadonlyArray<{ name: string }> } }).result.tools
+            .map((tool) => tool.name)
+            .filter((name) => capabilityToolNames.includes(name))
+            .sort(),
+        ),
+      );
+      const searched = yield* Effect.forEach(capabilityToolNames, (name) =>
+        rpc("tools/call", { name: "tool_search", arguments: { query: name } }).pipe(
+          Effect.map(
+            (body) =>
+              (
+                body as {
+                  result: {
+                    structuredContent: { tools: ReadonlyArray<{ name: string }> };
+                  };
+                }
+              ).result.structuredContent.tools,
+          ),
+          Effect.flatMap((tools) =>
+            tools.some((tool) => tool.name === name)
+              ? Effect.succeed(name)
+              : Effect.succeed(undefined),
+          ),
+        ),
+      ).pipe(Effect.map((names) => names.filter((name) => name !== undefined)));
+      expect(listed).toHaveLength(count);
+      expect(listed).toEqual(expected);
+      expect(searched).toHaveLength(count);
+      expect(searched.sort()).toEqual(expected);
+      expect(previewToolNames).toHaveLength(12);
+      expect(previewControlsToolNames).toHaveLength(2);
+      expect(deviceToolNames).toHaveLength(4);
+      expect(listed.filter((name) => previewToolNames.includes(name))).toHaveLength(
+        count === 0 ? 0 : previewToolNames.length,
+      );
+      expect(listed.filter((name) => previewControlsToolNames.includes(name))).toHaveLength(
+        count === 0 ? 0 : previewControlsToolNames.length,
+      );
+      expect(listed.filter((name) => deviceToolNames.includes(name))).toHaveLength(
+        count === 0 ? 0 : deviceToolNames.length,
+      );
     }),
   ).pipe(Effect.provide(NodeHttpServer.layerTest)),
 );

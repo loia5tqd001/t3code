@@ -145,9 +145,6 @@ const browserTestProject = {
       instances: [{ browser: "chromium" }],
       screenshotFailures: false,
       commands: {
-        captureUsageDialog: async ({ page }, outputPath: string) => {
-          await page.screenshot({ path: outputPath, animations: "disabled" });
-        },
         // Playwright's mouse outlives each test, so whatever mounts under its last
         // position starts hovered. test/browserSetup.ts parks it off the page before each test.
         resetPointer: async ({ page }) => {

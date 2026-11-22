@@ -1,8 +1,7 @@
 import { describe, expect, it } from "vite-plus/test";
-import { commands, page } from "vite-plus/test/browser";
+import { page } from "vite-plus/test/browser";
 
 import { render } from "../../../test/render";
-import "../../index.css";
 import { UsageModelDialog } from "./UsageModelDialog";
 
 const chartWindow = {
@@ -35,7 +34,6 @@ const model = {
 
 describe("UsageModelDialog", () => {
   it("exposes each stat as its own label and value to screen readers", async () => {
-    await page.viewport(1120, 900);
     await using _screen = await render(
       <UsageModelDialog
         model={model}
@@ -63,7 +61,6 @@ describe("UsageModelDialog", () => {
         .element(dialog.getByRole("definition").getByText(value, { exact: true }).first())
         .toBeVisible();
     }
-    await commands.captureUsageDialog("/private/tmp/t3-usage-model-dialog.png");
   });
 
   it("shows Unpriced instead of a dollar figure when no record has a price", async () => {

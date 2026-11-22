@@ -410,6 +410,38 @@ it("does not re-render while assistant text streams into the thread", async () =
   expect(renders).toBeGreaterThan(settled);
 });
 
+it("renders boundary-disabled move controls for a server-backed queue", async () => {
+  setup();
+  state.workflow = {
+    activeRun: { id: "run:active" },
+    queuedRuns: [
+      {
+        run: { id: "run:first", userMessageId: "message:first" },
+        text: "First",
+        attachments: [],
+      },
+      {
+        run: { id: "run:second", userMessageId: "message:second" },
+        text: "Second",
+        attachments: [],
+      },
+      {
+        run: { id: "run:third", userMessageId: "message:third" },
+        text: "Third",
+        attachments: [],
+      },
+    ],
+  };
+  await using _screen = await renderQueue();
+
+  const moveUp = page.getByRole("button", { name: "Move up", exact: true });
+  const moveDown = page.getByRole("button", { name: "Move down", exact: true });
+  await expect.element(moveUp.first()).toBeDisabled();
+  await expect.element(moveDown.last()).toBeDisabled();
+  await expect.element(moveUp.nth(1)).toBeEnabled();
+  await expect.element(moveDown.first()).toBeEnabled();
+});
+
 it("tells the user why Send now was rejected", async () => {
   setup();
   const reason = "Target run run:active is stopping and cannot be steered.";

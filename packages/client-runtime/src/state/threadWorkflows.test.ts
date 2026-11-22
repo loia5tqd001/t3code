@@ -1,10 +1,11 @@
 import { describe, expect, it } from "vite-plus/test";
-import type { OrchestrationV2ThreadProjection } from "@t3tools/contracts";
+import { RunId, type OrchestrationV2ThreadProjection } from "@t3tools/contracts";
 
 import {
   canForkProjectedAssistantItem,
   deriveThreadQueueWorkflowState,
   getUserQueuedThreadRuns,
+  queuedRunReorderTarget,
   resolveLatestMergeBackRun,
   threadSupportsProviderHandoff,
 } from "./threadWorkflows.ts";
@@ -155,6 +156,19 @@ describe("thread workflows", () => {
     expect(state.activeRun?.id).toBe("active");
     expect(state.canPromoteToSteer).toBe(true);
     expect(state.canSendNow).toBe(false);
+  });
+
+  it("finds the neighbour target for moving queued messages", () => {
+    const first = RunId.make("first");
+    const second = RunId.make("second");
+    const third = RunId.make("third");
+    const runs = [first, second, third].map((id) => ({ id }));
+
+    expect(queuedRunReorderTarget(runs, second, -1)).toBe(first);
+    expect(queuedRunReorderTarget(runs, second, 1)).toBeNull();
+    expect(queuedRunReorderTarget(runs, first, 1)).toBe(third);
+    expect(queuedRunReorderTarget(runs, first, -1)).toBeUndefined();
+    expect(queuedRunReorderTarget(runs, third, 1)).toBeUndefined();
   });
 
   it.each(["completed", "interrupted", "cancelled", "failed"])(

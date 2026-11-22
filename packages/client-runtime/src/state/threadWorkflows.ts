@@ -140,6 +140,18 @@ export function getUserQueuedThreadRuns(
   );
 }
 
+export function queuedRunReorderTarget(
+  runs: ReadonlyArray<Pick<Run, "id">>,
+  runId: Run["id"],
+  direction: -1 | 1,
+): Run["id"] | null | undefined {
+  const index = runs.findIndex((run) => run.id === runId);
+  const targetIndex = index + direction;
+  if (index === -1 || targetIndex < 0 || targetIndex >= runs.length) return undefined;
+  // The server finds `beforeRunId` after removing the moving run, so down skips the next row.
+  return direction === 1 ? (runs[targetIndex + 1]?.id ?? null) : runs[targetIndex]!.id;
+}
+
 export function deriveThreadQueueWorkflowState(
   projection: Projection,
   resolve: MFunctionType = mFallback,

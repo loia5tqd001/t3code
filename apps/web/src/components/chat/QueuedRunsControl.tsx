@@ -3,7 +3,10 @@ import {
   isAtomCommandInterrupted,
   squashAtomCommandFailure,
 } from "@t3tools/client-runtime/state/runtime";
-import { deriveThreadQueueWorkflowState } from "@t3tools/client-runtime/state/thread-workflows";
+import {
+  deriveThreadQueueWorkflowState,
+  queuedRunReorderTarget,
+} from "@t3tools/client-runtime/state/thread-workflows";
 import { assistantCitationsToPlainText } from "@t3tools/shared/assistantCitations";
 import { isSlashCommand } from "@t3tools/shared/composerTrigger";
 import {
@@ -21,6 +24,7 @@ import {
 import { resolveUserMessagePresentation } from "@t3tools/client-runtime/user-message";
 import { Link } from "@tanstack/react-router";
 import {
+  ArrowDownIcon,
   ArrowUpIcon,
   CalendarClockIcon,
   ChevronDownIcon,
@@ -108,6 +112,7 @@ export function QueuedRunsControl({
   const promote = useAtomCommand(threadEnvironment.promoteQueuedRun);
   const resume = useAtomCommand(threadEnvironment.resumeThreadQueue);
   const cancel = useAtomCommand(threadEnvironment.cancelQueuedRun);
+  const reorder = useAtomCommand(threadEnvironment.reorderQueuedRun);
   const [showAll, setShowAll] = useState(false);
   const queueListId = useId();
   const [busyRunId, setBusyRunId] = useState<RunId | null>(null);
@@ -245,6 +250,27 @@ export function QueuedRunsControl({
     await cancel({
       environmentId: props.environmentId,
       input: { threadId: props.threadId, runId },
+    });
+    setBusyRunId(null);
+  };
+
+  const move = async (itemIndex: number, direction: -1 | 1) => {
+    const item = items[itemIndex];
+    if (!item || item.runId === null || busyRunId !== null) return;
+    const beforeRunId = queuedRunReorderTarget(
+      queued.map(({ run }) => run),
+      item.runId,
+      direction,
+    );
+    if (beforeRunId === undefined) return;
+    setBusyRunId(item.runId);
+    await reorder({
+      environmentId: props.environmentId,
+      input: {
+        threadId: props.threadId,
+        runId: item.runId,
+        beforeRunId,
+      },
     });
     setBusyRunId(null);
   };
@@ -404,6 +430,48 @@ export function QueuedRunsControl({
                             : gt("Edit in the composer"))}
                       </TooltipPopup>
                     </Tooltip>
+                    {item.serverIndex !== null && queued.length > 1 ? (
+                      <>
+                        <Tooltip>
+                          <TooltipTrigger
+                            render={
+                              <Button
+                                size="icon-xs"
+                                variant="ghost-muted"
+                                aria-label={gt("Move up")}
+                                disabled={item.serverIndex === 0 || busyRunId !== null}
+                                onClick={() => void move(position, -1)}
+                              />
+                            }
+                          >
+                            <ArrowUpIcon />
+                          </TooltipTrigger>
+                          <TooltipPopup>
+                            <T>Move up</T>
+                          </TooltipPopup>
+                        </Tooltip>
+                        <Tooltip>
+                          <TooltipTrigger
+                            render={
+                              <Button
+                                size="icon-xs"
+                                variant="ghost-muted"
+                                aria-label={gt("Move down")}
+                                disabled={
+                                  item.serverIndex === queued.length - 1 || busyRunId !== null
+                                }
+                                onClick={() => void move(position, 1)}
+                              />
+                            }
+                          >
+                            <ArrowDownIcon />
+                          </TooltipTrigger>
+                          <TooltipPopup>
+                            <T>Move down</T>
+                          </TooltipPopup>
+                        </Tooltip>
+                      </>
+                    ) : null}
                     <Tooltip>
                       <TooltipTrigger
                         render={

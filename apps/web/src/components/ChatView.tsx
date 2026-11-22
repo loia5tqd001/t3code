@@ -4149,6 +4149,12 @@ export default function ChatView(props: ChatViewProps) {
                     providers: providerStatuses,
                     sources: serverConfig?.usageLimitSources ?? EMPTY_USAGE_LIMIT_SOURCES,
                     contextWindow: activeContextWindow,
+                    activity: serverProjection
+                      ? {
+                          runs: serverProjection.runs,
+                          providerTurns: serverProjection.providerTurns,
+                        }
+                      : null,
                   }}
                 />
 

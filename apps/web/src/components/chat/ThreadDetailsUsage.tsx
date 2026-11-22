@@ -1,4 +1,6 @@
 import type {
+  OrchestrationV2ProviderTurn,
+  OrchestrationV2Run,
   ProviderInstanceId,
   ServerProvider,
   ServerProviderUsageLimits,
@@ -12,7 +14,12 @@ import {
   paceRemainingPercent,
   remainingPercent,
 } from "@t3tools/shared/usageLimits";
-import { formatDuration, limitsNotice } from "@t3tools/shared/usageLimitsCopy";
+import {
+  formatDuration as formatLimitDuration,
+  limitsNotice,
+} from "@t3tools/shared/usageLimitsCopy";
+import { formatDuration as formatRunDuration } from "@t3tools/shared/orchestrationTimingCopy";
+import { formatCount, formatPercent, formatTokens } from "@t3tools/shared/usageFormat";
 import { Link } from "@tanstack/react-router";
 import { msg, useGT, useLocale, useMessages } from "gt-react";
 import type { ReactNode } from "react";
@@ -25,7 +32,9 @@ import { cn } from "../../lib/utils";
 import { formatUpcomingTimestamp } from "../../timestampFormat";
 import { Tooltip, TooltipPopup, TooltipTrigger } from "../ui/tooltip";
 import { formatContextWindowCompactionMessage } from "./compaction.logic";
+import { tokenTypeSegments } from "../usage/usageBreakdown";
 import { ThreadDetailsSection } from "./ThreadDetailsSection";
+import { deriveThreadUsageMetrics } from "./threadUsageMetrics";
 import { nextPoolReset, poolSources, resolveThreadDetailsLimits } from "./ThreadDetailsUsage.logic";
 
 const PACE_LABEL: Record<LimitPace, string> = {
@@ -40,6 +49,11 @@ export interface ThreadDetailsUsageInput {
   readonly providers: readonly ServerProvider[];
   readonly sources: UsageLimitSourceSnapshots;
   readonly contextWindow: ContextWindowSnapshot | null;
+  /** The thread's runs and provider turns, for its all-time totals. Null until the thread loads. */
+  readonly activity: {
+    readonly runs: ReadonlyArray<OrchestrationV2Run>;
+    readonly providerTurns: ReadonlyArray<OrchestrationV2ProviderTurn>;
+  } | null;
 }
 
 type UsageTone = "error" | "warning" | null;
@@ -56,7 +70,7 @@ export function ThreadDetailsUsage({
   model,
   providers,
   sources,
-}: Omit<ThreadDetailsUsageInput, "contextWindow">) {
+}: Omit<ThreadDetailsUsageInput, "contextWindow" | "activity">) {
   const gt = useGT();
   const nowMinute = useNowMinute();
   const now = Date.parse(`${nowMinute}:00Z`);
@@ -208,7 +222,7 @@ function LimitRow({
           {window.resetsAt && resetsAt > now ? (
             <span className="text-muted-foreground">
               {gt("Resets in {duration} · {time}", {
-                duration: formatDuration(resetsAt - now, m),
+                duration: formatLimitDuration(resetsAt - now, m),
                 time: formatUpcomingTimestamp(window.resetsAt, timestampFormat, now, undefined, m),
               })}
             </span>
@@ -232,7 +246,7 @@ function PoolRow({ window, now }: { readonly window: LimitPoolWindow; readonly n
   const reset =
     next && resetsAt
       ? {
-          duration: formatDuration(next.at - now, m),
+          duration: formatLimitDuration(next.at - now, m),
           time: formatUpcomingTimestamp(resetsAt, timestampFormat, now, undefined, m),
         }
       : null;
@@ -374,5 +388,170 @@ function UsageRow({
         </div>
       </TooltipPopup>
     </Tooltip>
+  );
+}
+
+interface MetricTile {
+  readonly label: string;
+  readonly value: string;
+  readonly detail: string | null;
+}
+
+/** All-time totals for the thread: what providers reported per turn, plus how long prompts ran. */
+export function ThreadDetailsMetrics({
+  activity,
+}: {
+  readonly activity: NonNullable<ThreadDetailsUsageInput["activity"]>;
+}) {
+  const gt = useGT();
+  const m = useMessages();
+  const locale = useLocale();
+  const metrics = deriveThreadUsageMetrics(activity.providerTurns, activity.runs);
+  const { tokens, prompts, reportedTurns, runTime } = metrics;
+  if (tokens === null && prompts === 0) return null;
+
+  const tiles: MetricTile[] = [];
+  if (prompts > 0) {
+    tiles.push({
+      label: gt("Prompts"),
+      value: formatCount(prompts, locale),
+      detail:
+        tokens === null
+          ? null
+          : gt("{count} per prompt", { count: formatTokens(tokens.totalTokens / prompts) }),
+    });
+  }
+  if (tokens !== null && reportedTurns > 0) {
+    tiles.push({
+      label: gt("Turns"),
+      value: formatCount(reportedTurns, locale),
+      detail: gt("{count} per turn", { count: formatTokens(tokens.totalTokens / reportedTurns) }),
+    });
+  }
+  if (tokens !== null) {
+    tiles.push({
+      label: gt("Output", { $context: "output tokens" }),
+      value: formatTokens(tokens.outputTokens),
+      detail:
+        tokens.reasoningTokens > 0
+          ? gt("{count} reasoning", { count: formatTokens(tokens.reasoningTokens) })
+          : null,
+    });
+  }
+  if (metrics.cacheHitRate !== null && tokens !== null) {
+    tiles.push({
+      label: gt("Cache hit"),
+      value: formatPercent(metrics.cacheHitRate, 0),
+      detail: gt("{count} cached", { count: formatTokens(tokens.cachedInputTokens) }),
+    });
+  }
+  if (runTime !== null) {
+    tiles.push(
+      {
+        label: gt("Run time"),
+        value: formatRunDuration(runTime.totalMs, m),
+        detail: gt("{duration} average", { duration: formatRunDuration(runTime.averageMs, m) }),
+      },
+      {
+        label: gt("Longest run"),
+        value: formatRunDuration(runTime.longestMs, m),
+        detail: null,
+      },
+    );
+  }
+
+  const segments =
+    tokens === null ? [] : tokenTypeSegments(tokens).filter((segment) => segment.value > 0);
+  const inputTokens =
+    tokens === null
+      ? 0
+      : tokens.uncachedInputTokens + tokens.cachedInputTokens + tokens.cacheCreationTokens;
+
+  return (
+    <ThreadDetailsSection
+      headingId="thread-details-metrics-heading"
+      title={gt("Thread usage")}
+      showHeading={false}
+    >
+      <div className="flex flex-col gap-3 px-2.5 py-1 text-xs">
+        {tokens !== null ? (
+          <Tooltip>
+            <TooltipTrigger
+              render={
+                <div
+                  tabIndex={0}
+                  aria-label={gt("{label}: {value}", {
+                    label: gt("Processed tokens"),
+                    value: tokens.totalTokens.toLocaleString(locale),
+                  })}
+                  className="flex cursor-default flex-col gap-1.5 rounded-lg outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-ring"
+                />
+              }
+            >
+              <span className="flex items-baseline justify-between gap-2 text-2xs text-muted-foreground">
+                <span className="truncate">{gt("Processed tokens")}</span>
+                {metrics.partial ? <span className="shrink-0">{gt("Partial")}</span> : null}
+              </span>
+              <span className="text-xl leading-6 font-semibold text-foreground tabular-nums">
+                {formatTokens(tokens.totalTokens)}
+              </span>
+              <span aria-hidden className="flex h-1.5 gap-px overflow-hidden rounded-full">
+                {segments.map((segment) => (
+                  <span
+                    key={segment.label}
+                    className="h-full min-w-0.5"
+                    style={{ flex: `${segment.value} 1 0`, backgroundColor: segment.color }}
+                  />
+                ))}
+              </span>
+              <span className="truncate text-muted-foreground tabular-nums">
+                {gt("{input} in · {output} out", {
+                  input: formatTokens(inputTokens),
+                  output: formatTokens(tokens.outputTokens),
+                })}
+              </span>
+            </TooltipTrigger>
+            <TooltipPopup side="left" sideOffset={16}>
+              <div className="flex flex-col gap-0.5">
+                {segments.map((segment) => (
+                  <span key={segment.label} className="text-muted-foreground">
+                    <span className="text-foreground">{m(segment.label)}</span>
+                    {" · "}
+                    {segment.value.toLocaleString(locale)}
+                    {" · "}
+                    {formatPercent(segment.value / tokens.totalTokens)}
+                  </span>
+                ))}
+                {tokens.reasoningTokens > 0 ? (
+                  <span className="text-muted-foreground">
+                    {gt("Output includes {count} reasoning tokens", {
+                      count: tokens.reasoningTokens.toLocaleString(locale),
+                    })}
+                  </span>
+                ) : null}
+                {metrics.partial ? (
+                  <span className="text-muted-foreground">
+                    {gt("Some turns reported no token usage, so the total is a floor.")}
+                  </span>
+                ) : null}
+              </div>
+            </TooltipPopup>
+          </Tooltip>
+        ) : null}
+        <dl className="grid grid-cols-2 gap-x-3 gap-y-2.5">
+          {tiles.map((tile) => (
+            <div key={tile.label} className="flex min-w-0 flex-col">
+              <dt className="truncate text-2xs text-muted-foreground">{tile.label}</dt>
+              <dd className="truncate text-sm font-medium text-foreground tabular-nums">
+                {tile.value}
+              </dd>
+              <dd className="min-h-4 truncate text-2xs text-muted-foreground tabular-nums">
+                {tile.detail}
+              </dd>
+            </div>
+          ))}
+        </dl>
+      </div>
+    </ThreadDetailsSection>
   );
 }

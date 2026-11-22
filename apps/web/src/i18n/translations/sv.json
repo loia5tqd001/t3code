@@ -12481,5 +12481,19 @@
   "b56ae895e3ada6b3": "Forken skapades, men dess nya worktree nådde inte den här klienten.",
   "a169d282a060cf4d": "Tråd: Ny sidochatt",
   "b96e01e200efbb9c": "Tråd: Forka",
-  "4523e1fe87eda93e": "Tråd: Forka i ny worktree"
+  "4523e1fe87eda93e": "Tråd: Forka i ny worktree",
+  "43d4300ebb159e32": "Prompter",
+  "e363e6d0f067a17f": "{count} per prompt",
+  "784289291ce8986f": "Turer",
+  "6accecc0c963302a": "{count} per tur",
+  "f35b623676aab3f5": "{count} resonemang",
+  "8f39bae30b806216": "{count} cachade",
+  "1621647be7ad7e67": "Körtid",
+  "5baaa41f5efb3cbe": "{duration} i snitt",
+  "eec60df2a2ae05d3": "Längsta körning",
+  "fdbdaf07838884e0": "Trådanvändning",
+  "89fea43c0935af88": "Delvis",
+  "24778ed4c9f8a51e": "{input} in · {output} ut",
+  "b6152661473a5258": "Utdata innehåller {count} resonemangstokens",
+  "bea221d7706fa9ea": "Vissa turer rapporterade ingen tokenanvändning, så totalen är ett golv."
 }

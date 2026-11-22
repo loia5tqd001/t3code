@@ -12474,5 +12474,19 @@
   "b56ae895e3ada6b3": "A bifurcação foi criada, mas o novo worktree não chegou a este cliente.",
   "a169d282a060cf4d": "Thread: Novo chat lateral",
   "b96e01e200efbb9c": "Thread: Bifurcar",
-  "4523e1fe87eda93e": "Thread: Bifurcar em novo worktree"
+  "4523e1fe87eda93e": "Thread: Bifurcar em novo worktree",
+  "43d4300ebb159e32": "Prompts",
+  "e363e6d0f067a17f": "{count} por prompt",
+  "784289291ce8986f": "Turnos",
+  "6accecc0c963302a": "{count} por turno",
+  "f35b623676aab3f5": "{count} de raciocínio",
+  "8f39bae30b806216": "{count} em cache",
+  "1621647be7ad7e67": "Tempo de execução",
+  "5baaa41f5efb3cbe": "{duration} em média",
+  "eec60df2a2ae05d3": "Execução mais longa",
+  "fdbdaf07838884e0": "Uso da conversa",
+  "89fea43c0935af88": "Parcial",
+  "24778ed4c9f8a51e": "{input} entrada · {output} saída",
+  "b6152661473a5258": "A saída inclui {count} tokens de raciocínio",
+  "bea221d7706fa9ea": "Alguns turnos não informaram o uso de tokens, então o total é um mínimo."
 }

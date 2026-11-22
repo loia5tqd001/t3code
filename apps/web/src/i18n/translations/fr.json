@@ -12474,5 +12474,19 @@
   "b56ae895e3ada6b3": "Le fork a été créé, mais son nouvel espace de travail n'a pas atteint ce client.",
   "a169d282a060cf4d": "Fil : Nouveau chat latéral",
   "b96e01e200efbb9c": "Fil : Créer un fork",
-  "4523e1fe87eda93e": "Fil : Créer un fork dans un nouvel espace de travail"
+  "4523e1fe87eda93e": "Fil : Créer un fork dans un nouvel espace de travail",
+  "43d4300ebb159e32": "Prompts",
+  "e363e6d0f067a17f": "{count} par prompt",
+  "784289291ce8986f": "Tours",
+  "6accecc0c963302a": "{count} par tour",
+  "f35b623676aab3f5": "{count} de raisonnement",
+  "8f39bae30b806216": "{count} en cache",
+  "1621647be7ad7e67": "Durée d'exécution",
+  "5baaa41f5efb3cbe": "{duration} en moyenne",
+  "eec60df2a2ae05d3": "Exécution la plus longue",
+  "fdbdaf07838884e0": "Utilisation du fil",
+  "89fea43c0935af88": "Partiel",
+  "24778ed4c9f8a51e": "{input} en entrée · {output} en sortie",
+  "b6152661473a5258": "La sortie inclut {count} tokens de raisonnement",
+  "bea221d7706fa9ea": "Certains tours n'ont signalé aucune utilisation de tokens, le total est donc un minimum."
 }

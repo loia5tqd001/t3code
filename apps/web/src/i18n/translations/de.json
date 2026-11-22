@@ -12474,5 +12474,19 @@
   "b56ae895e3ada6b3": "Der Fork wurde erstellt, aber sein neuer Worktree hat diesen Client nicht erreicht.",
   "a169d282a060cf4d": "Thread: Neuer Seitenchat",
   "b96e01e200efbb9c": "Thread: Forken",
-  "4523e1fe87eda93e": "Thread: In neuem Worktree forken"
+  "4523e1fe87eda93e": "Thread: In neuem Worktree forken",
+  "43d4300ebb159e32": "Prompts",
+  "e363e6d0f067a17f": "{count} pro Prompt",
+  "784289291ce8986f": "Turns",
+  "6accecc0c963302a": "{count} pro Turn",
+  "f35b623676aab3f5": "{count} Reasoning",
+  "8f39bae30b806216": "{count} im Cache",
+  "1621647be7ad7e67": "Laufzeit",
+  "5baaa41f5efb3cbe": "{duration} im Schnitt",
+  "eec60df2a2ae05d3": "Längster Lauf",
+  "fdbdaf07838884e0": "Chat-Nutzung",
+  "89fea43c0935af88": "Teilweise",
+  "24778ed4c9f8a51e": "{input} ein · {output} aus",
+  "b6152661473a5258": "Die Ausgabe enthält {count} Reasoning-Tokens",
+  "bea221d7706fa9ea": "Einige Turns haben keine Token-Nutzung gemeldet, daher ist die Summe ein Mindestwert."
 }

@@ -12483,5 +12483,19 @@
   "b56ae895e3ada6b3": "The fork was created, but its new worktree did not reach this client.",
   "a169d282a060cf4d": "Thread: New Side Chat",
   "b96e01e200efbb9c": "Thread: Fork",
-  "4523e1fe87eda93e": "Thread: Fork in New Worktree"
+  "4523e1fe87eda93e": "Thread: Fork in New Worktree",
+  "43d4300ebb159e32": "Prompts",
+  "e363e6d0f067a17f": "{count} per prompt",
+  "784289291ce8986f": "Turns",
+  "6accecc0c963302a": "{count} per turn",
+  "f35b623676aab3f5": "{count} reasoning",
+  "8f39bae30b806216": "{count} cached",
+  "1621647be7ad7e67": "Run time",
+  "5baaa41f5efb3cbe": "{duration} average",
+  "eec60df2a2ae05d3": "Longest run",
+  "fdbdaf07838884e0": "Thread usage",
+  "89fea43c0935af88": "Partial",
+  "24778ed4c9f8a51e": "{input} in · {output} out",
+  "b6152661473a5258": "Output includes {count} reasoning tokens",
+  "bea221d7706fa9ea": "Some turns reported no token usage, so the total is a floor."
 }

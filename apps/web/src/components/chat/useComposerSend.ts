@@ -1501,6 +1501,11 @@ export function useComposerSend(input: ComposerSendInput) {
             }),
           },
           modelSelection: ctxSelectedModelSelection,
+          // A cross-provider pick is saved only when its first turn starts.
+          ...(isServerThread &&
+          ctxSelectedModelSelection.instanceId === activeThread.modelSelection.instanceId
+            ? { followsThreadSelection: true }
+            : {}),
           titleSeed: title,
           runtimeMode,
           interactionMode: DEFAULT_INTERACTION_MODE,

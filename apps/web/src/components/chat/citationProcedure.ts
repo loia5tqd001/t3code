@@ -24,7 +24,7 @@ export type CitationPhase =
   | { readonly _tag: "failed" };
 
 export interface CitedThreadSnapshot {
-  readonly message: "assistant" | "other" | null;
+  readonly message: "assistant" | "user" | null;
   readonly hasMoreHistory: boolean;
   readonly loadFailed?: true;
 }
@@ -63,6 +63,8 @@ const UNAVAILABLE = {
  * the signal aborts.
  */
 export async function loadCitedHistory(input: {
+  /** A saved message reveals its whole row, so a user message counts; a quote needs a response. */
+  readonly wholeMessage: boolean;
   readonly signal: AbortSignal;
   readonly readThread: () => Promise<CitedThreadSnapshot | null>;
   readonly loadThrough: () => Promise<HistoryPageResult>;
@@ -71,8 +73,10 @@ export async function loadCitedHistory(input: {
     const thread = await input.readThread();
     if (thread === null || input.signal.aborted) return { _tag: "aborted" };
     if (thread.loadFailed) return COULD_NOT_LOAD;
-    if (thread.message === "assistant") return { _tag: "found" };
-    if (thread.message === "other") {
+    if (thread.message === "assistant" || (thread.message === "user" && input.wholeMessage)) {
+      return { _tag: "found" };
+    }
+    if (thread.message === "user") {
       return {
         _tag: "failed",
         title: msg("The citation does not refer to an assistant response"),
@@ -94,6 +98,7 @@ export async function loadCitedHistory(input: {
 export function resolveCitationPhase(input: {
   readonly history: CitedHistory;
   readonly messageId: string;
+  readonly wholeMessage: boolean;
   readonly entries: ReadonlyArray<TimelineEntry>;
   readonly rows: ReadonlyArray<MessagesTimelineRow>;
 }): CitationPhase {
@@ -105,7 +110,9 @@ export function resolveCitationPhase(input: {
   );
   // The history store can hold the message a render before the entries do.
   if (!source) return { _tag: "loading" };
-  if (source.kind === "message" && source.message.role !== "assistant") return { _tag: "failed" };
+  if (!input.wholeMessage && source.kind === "message" && source.message.role !== "assistant") {
+    return { _tag: "failed" };
+  }
   const row = input.rows.find(
     (candidate) =>
       (candidate.kind === "message" && candidate.message.id === input.messageId) ||
@@ -147,16 +154,17 @@ export function citedThreadSnapshot(input: {
         sentMessageFromToolItem(item) !== undefined),
   )?.item;
   return {
-    message: item === undefined ? null : item.type === "user_message" ? "other" : "assistant",
+    message: item === undefined ? null : item.type === "user_message" ? "user" : "assistant",
     hasMoreHistory: input.history.hasMoreHistory,
   };
 }
 
 interface CitedHistoryKey {
   readonly key: string;
-  readonly environmentId: AssistantCitationRequest["citation"]["environmentId"];
-  readonly threadId: AssistantCitationRequest["citation"]["threadId"];
-  readonly messageId: AssistantCitationRequest["citation"]["messageId"];
+  readonly environmentId: AssistantCitationRequest["environmentId"];
+  readonly threadId: AssistantCitationRequest["threadId"];
+  readonly messageId: AssistantCitationRequest["messageId"];
+  readonly wholeMessage: boolean;
 }
 
 function waitForSettledThread(
@@ -191,7 +199,7 @@ function waitForSettledThread(
  * Plain-object keys compare structurally, so one activation is one procedure.
  */
 const citedHistoryAtom = Atom.family(
-  ({ key, environmentId, threadId, messageId }: CitedHistoryKey) => {
+  ({ key, environmentId, threadId, messageId, wholeMessage }: CitedHistoryKey) => {
     const ref = { environmentId, threadId };
     const threadAtom = environmentThreadDetails.quietThreadAtom(ref);
     const historyAtom = environmentThreadDetails.historyAtom(ref);
@@ -210,6 +218,7 @@ const citedHistoryAtom = Atom.family(
       const controller = new AbortController();
       get.addFinalizer(() => controller.abort());
       void loadCitedHistory({
+        wholeMessage,
         signal: controller.signal,
         readThread: () => waitForSettledThread(get.registry, settledThreadAtom, controller.signal),
         loadThrough: async () => {
@@ -247,9 +256,10 @@ export function useCitedHistory(request: AssistantCitationRequest | null): Cited
       ? NO_CITED_HISTORY_ATOM
       : citedHistoryAtom({
           key: request.key,
-          environmentId: request.citation.environmentId,
-          threadId: request.citation.threadId,
-          messageId: request.citation.messageId,
+          environmentId: request.environmentId,
+          threadId: request.threadId,
+          messageId: request.messageId,
+          wholeMessage: request.citation === null,
         }),
   );
 }

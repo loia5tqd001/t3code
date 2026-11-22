@@ -1,5 +1,11 @@
 import type { LegendListRef } from "@legendapp/list/react";
-import type { AssistantCitation, MessageId, ScopedThreadRef } from "@t3tools/contracts";
+import type {
+  AssistantCitation,
+  EnvironmentId,
+  MessageId,
+  ScopedThreadRef,
+  ThreadId,
+} from "@t3tools/contracts";
 import { msg } from "gt-react";
 import { useEffect, useRef, type ReactNode, type RefObject } from "react";
 import {
@@ -85,9 +91,13 @@ export function observeAssistantCitationCommentSource({
   return dispose;
 }
 
+/** Reveals one message; a quote narrows it to text, and saved messages reveal the whole row. */
 export interface AssistantCitationRequest {
-  citation: AssistantCitation;
   key: string;
+  environmentId: EnvironmentId;
+  threadId: ThreadId;
+  messageId: MessageId;
+  citation: AssistantCitation | null;
 }
 
 /** Navigation owns activation state across virtual row remounts. */
@@ -165,7 +175,7 @@ function observeAssistantCitationSource({
     const state = list.getState();
     const index = state.indexByKey(itemKey);
     if (index === undefined || !(state.sizeAtIndex(index) > 0)) return;
-    const range = resolveAssistantCitationRange(root, request.citation);
+    const range = request.citation ? resolveAssistantCitationRange(root, request.citation) : null;
     const rect = (range ?? root).getBoundingClientRect();
     if (rect.height <= 0 || scrollNode.clientHeight <= 0) {
       clear();
@@ -214,7 +224,7 @@ function observeAssistantCitationSource({
       ) {
         root.focus({ preventScroll: true });
       }
-      if (!range) {
+      if (!range && request.citation) {
         toastManager.add({
           type: "warning",
           title: m(msg("The quoted text has changed")),
@@ -362,7 +372,7 @@ export function AssistantCitationSource({
   useEffect(() => {
     const root = rootRef.current;
     const list = listRef.current;
-    if (!root || !list || !request || request.citation.messageId !== messageId) return;
+    if (!root || !list || !request || request.messageId !== messageId) return;
     return observeAssistantCitationSource({ root, itemKey, request, list });
   }, [itemKey, listRef, messageId, request]);
 

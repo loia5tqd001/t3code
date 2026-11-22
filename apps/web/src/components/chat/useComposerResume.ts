@@ -30,7 +30,6 @@ interface ComposerResumeInput {
   readonly currentRouteThreadKeyRef: { readonly current: string | null };
   readonly activeThread: EnvironmentThreadShell | undefined;
   readonly resumableRunId: RunId | null;
-  readonly hasHeldQueuedRuns: boolean;
   readonly canResume: boolean;
   readonly isSendBusy: boolean;
   readonly isRevertingCheckpoint: boolean;
@@ -62,7 +61,6 @@ export function useComposerResume(input: ComposerResumeInput) {
     currentRouteThreadKeyRef,
     activeThread,
     resumableRunId,
-    hasHeldQueuedRuns,
     canResume,
     isSendBusy,
     isRevertingCheckpoint,
@@ -124,7 +122,7 @@ export function useComposerResume(input: ComposerResumeInput) {
         interactionMode: DEFAULT_INTERACTION_MODE,
       });
       if (settingsResult._tag === "Failure") return settingsResult;
-      const turnResult = await startThreadTurn({
+      return startThreadTurn({
         environmentId,
         input: {
           threadId,
@@ -141,9 +139,6 @@ export function useComposerResume(input: ComposerResumeInput) {
           dispatchMode: "start",
         },
       });
-      if (turnResult._tag === "Failure" || !hasHeldQueuedRuns) return turnResult;
-      clearUsageLimitsFor(routeThreadKey);
-      return resumeThreadQueue({ environmentId, input: { threadId } });
     };
     const result = await resume();
     if (result._tag === "Failure") {

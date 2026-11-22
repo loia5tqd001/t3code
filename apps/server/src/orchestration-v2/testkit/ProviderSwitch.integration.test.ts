@@ -5458,17 +5458,23 @@ describe("orchestration v2 provider switching", () => {
 
   // regression: #21314 a queued PR update must follow the provider that took over the thread
   it.live.each([
-    ["automatic", "Claude"],
-    ["queue.resume", "compatible Codex"],
-    ["queue.resume", "broken compatible Codex"],
+    ["automatic", "Claude", "notification"],
+    ["queue.resume", "compatible Codex", "notification"],
+    ["queue.resume", "broken compatible Codex", "notification"],
+    ["queue.resume", "Claude", "composer"],
+    ["automatic", "Claude", "composer"],
+    ["automatic", "Claude", "pinned"],
+    ["blocked resume", "Claude", "composer"],
+    ["blocked resume", "Claude", "pinned"],
   ] as const)(
-    "delivers a queued PR update on the current provider through %s (%s)",
-    ([delivery, target]) =>
+    "delivers or holds a queued message as appropriate after switching through %s (%s, %s)",
+    ([delivery, target, messageKind]) =>
       Effect.gen(function* () {
         const cwd = yield* checkpointWorkspace(`pr-wake-${delivery}`);
         const capturedTurns = yield* Ref.make<ReadonlyArray<CapturedTurn>>([]);
         const started = yield* Deferred.make<void>();
         const release = yield* Deferred.make<void>();
+        const refuseStarts = yield* Ref.make(0);
         const compatible = target !== "Claude";
         const broken = target === "broken compatible Codex";
         const generation = yield* Ref.make(0);
@@ -5514,6 +5520,7 @@ describe("orchestration v2 provider switching", () => {
             modelSelection: selection,
             responseByRunOrdinal: {},
             capturedTurns,
+            refuseStarts,
             ...(broken
               ? { brokenRunOrdinals: new Set<number>(), nativeThreadGeneration: generation }
               : {}),
@@ -5586,14 +5593,23 @@ describe("orchestration v2 provider switching", () => {
             threadId,
             text: "Review the new PR comments",
             attachments: [],
-            createdBy: "agent",
-            creationSource: "server",
             dispatchMode: { type: "queue_after_active" },
-            notification: {
-              source: { kind: "monitor" },
-              outcome: "updated",
-              summary: "New PR comments",
-            },
+            ...(messageKind === "notification"
+              ? {
+                  createdBy: "agent",
+                  creationSource: "server",
+                  notification: {
+                    source: { kind: "monitor" },
+                    outcome: "updated",
+                    summary: "New PR comments",
+                  },
+                }
+              : {
+                  createdBy: "user",
+                  creationSource: "web",
+                  modelSelection: CODEX_MODEL_SELECTION,
+                  ...(messageKind === "composer" ? { followsThreadSelection: true } : {}),
+                }),
           });
           const [active, wake] = (yield* orchestrator.getThreadProjection(threadId)).runs;
           assert.isDefined(active);
@@ -5611,6 +5627,56 @@ describe("orchestration v2 provider switching", () => {
           );
           yield* worker.drain();
 
+          if (delivery === "blocked resume") {
+            yield* Ref.set(refuseStarts, 1);
+            yield* orchestrator.dispatch({
+              type: "message.dispatch",
+              commandId: CommandId.make("blocked-resume"),
+              messageId: MessageId.make("blocked-resume"),
+              threadId,
+              text: "",
+              attachments: [],
+              createdBy: "user",
+              creationSource: "web",
+              modelSelection: selection,
+              manualContinuationOfRunId: active.id,
+              dispatchMode: { type: "start_immediately" },
+            });
+            yield* orchestrator.streamStoredEvents.pipe(
+              Stream.filter(
+                ({ event }) =>
+                  event.type === "run.updated" &&
+                  event.payload.manualContinuationOfRunId === active.id &&
+                  event.payload.status === "failed",
+              ),
+              Stream.runHead,
+            );
+            yield* worker.drain();
+            yield* orchestrator.resumeQueuedRuns;
+            yield* worker.drain();
+            if (messageKind === "pinned") {
+              const rejection = yield* orchestrator
+                .dispatch({
+                  type: "queued-run.start",
+                  commandId: CommandId.make("start-pinned"),
+                  threadId,
+                  runId: wake.id,
+                })
+                .pipe(Effect.flip);
+              assert.match(
+                String(rejection._tag === "OrchestratorDispatchError" && rejection.cause),
+                /Continue the limited thread/,
+              );
+            }
+            const after = yield* orchestrator.getThreadProjection(threadId);
+            assert.equal(after.runs.find((run) => run.id === wake.id)?.status, "queued");
+            assert.equal(
+              after.messages.find((message) => message.id === wake.userMessageId)?.text,
+              "Review the new PR comments",
+            );
+            assert.lengthOf(yield* Ref.get(capturedTurns), 1);
+            return;
+          }
           if (delivery === "automatic") {
             yield* dispatch("Take over the work", selection);
           } else {
@@ -5640,17 +5706,21 @@ describe("orchestration v2 provider switching", () => {
           const turns = yield* Ref.get(capturedTurns);
           assert.lengthOf(turns, delivery === "automatic" ? 3 : 2);
           const executed = turns.at(-1)!;
-          assert.equal(executed.driver, compatible ? CODEX_DRIVER : CLAUDE_DRIVER);
+          const expectedSelection = messageKind === "pinned" ? CODEX_MODEL_SELECTION : selection;
+          assert.equal(
+            executed.driver,
+            compatible || messageKind === "pinned" ? CODEX_DRIVER : CLAUDE_DRIVER,
+          );
           assert.include(executed.text, "Review the new PR comments");
-          assert.deepEqual(executed.modelSelection, selection);
-          assert.deepEqual(after.thread.modelSelection, selection);
+          assert.deepEqual(executed.modelSelection, expectedSelection);
+          assert.deepEqual(after.thread.modelSelection, expectedSelection);
           const delivered = after.runs.find((run) => run.id === wake.id)!;
           assert.equal(delivered.status, "completed");
-          assert.deepEqual(delivered.modelSelection, selection);
-          assert.equal(delivered.providerInstanceId, selection.instanceId);
+          assert.deepEqual(delivered.modelSelection, expectedSelection);
+          assert.equal(delivered.providerInstanceId, expectedSelection.instanceId);
           assert.equal(delivered.providerThreadId, executed.providerThreadId);
           assert.equal(after.thread.activeProviderThreadId, delivered.providerThreadId);
-          if (delivery === "automatic") {
+          if (delivery === "automatic" && messageKind !== "pinned") {
             assert.equal(executed.providerThreadId, turns[1]!.providerThreadId);
             assert.equal(executed.nativeThreadId, turns[1]!.nativeThreadId);
           }
@@ -5666,24 +5736,28 @@ describe("orchestration v2 provider switching", () => {
           assert.equal(
             after.providerThreads.find((entry) => entry.id === delivered.providerThreadId)
               ?.providerInstanceId,
-            selection.instanceId,
+            expectedSelection.instanceId,
           );
           assert.equal(
             after.turnItems.find(
-              (entry) => entry.type === "notification" && entry.runId === wake.id,
+              (entry) =>
+                entry.type === (messageKind === "notification" ? "notification" : "user_message") &&
+                entry.runId === wake.id,
             )?.providerThreadId,
             delivered.providerThreadId,
           );
           const attempt = after.attempts.find((entry) => entry.id === delivered.activeAttemptId);
           const root = after.nodes.find((entry) => entry.id === delivered.rootNodeId);
-          assert.equal(attempt?.providerInstanceId, selection.instanceId);
+          assert.equal(attempt?.providerInstanceId, expectedSelection.instanceId);
           assert.equal(attempt?.providerThreadId, delivered.providerThreadId);
           assert.equal(root?.providerThreadId, delivered.providerThreadId);
-          assert.equal(
-            after.checkpointScopes.find((entry) => entry.id === root?.checkpointScopeId)
-              ?.providerThreadId,
-            delivered.providerThreadId,
-          );
+          if (messageKind !== "pinned") {
+            assert.equal(
+              after.checkpointScopes.find((entry) => entry.id === root?.checkpointScopeId)
+                ?.providerThreadId,
+              delivered.providerThreadId,
+            );
+          }
         }).pipe(
           Effect.provide(
             ProviderReplayHarness.layerWithRegistry(

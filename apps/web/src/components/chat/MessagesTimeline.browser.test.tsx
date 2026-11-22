@@ -1246,6 +1246,9 @@ describe("MessagesTimeline usage limit notice", () => {
 
 const CITATION_REQUEST = {
   key: "activation-1",
+  environmentId: ENVIRONMENT_ID,
+  threadId: ThreadId.make("thread-cited"),
+  messageId: MessageId.make("cited"),
   citation: {
     version: 1,
     environmentId: ENVIRONMENT_ID,
@@ -1318,6 +1321,32 @@ describe("MessagesTimeline citations", () => {
       expect(cited?.textContent).toContain("the cited answer");
       expect(cited?.contains(document.activeElement)).toBe(true);
     });
+  });
+
+  it("reveals a saved user message without a quote and leaves the timeline free", async () => {
+    using toast = vi.spyOn(toastManager, "add");
+    await using _screen = await renderTimeline(
+      [
+        message("A saved question", {}, "question"),
+        message("An answer", { role: "assistant" }, "answer"),
+      ],
+      {
+        citationRequest: {
+          key: "saved-1",
+          environmentId: ENVIRONMENT_ID,
+          threadId: ThreadId.make("thread-cited"),
+          messageId: MessageId.make("question"),
+          citation: null,
+        },
+        citationHistory: { _tag: "found" },
+      },
+    );
+    await vi.waitFor(() => {
+      const source = document.querySelector('[data-assistant-citation-source="question"]');
+      expect(source?.contains(document.activeElement)).toBe(true);
+    });
+    expect(document.querySelector("[data-citation-highlighted]")).toBeNull();
+    expect(toast).not.toHaveBeenCalled();
   });
 
   it("opens the superseded attempt that folds the cited response", async () => {

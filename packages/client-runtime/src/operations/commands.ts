@@ -206,6 +206,7 @@ export interface StartThreadTurnInput extends ThreadCommandInput {
     readonly idleCompaction?: import("@t3tools/contracts").OrchestrationV2IdleCompaction;
   };
   readonly modelSelection?: ModelSelection;
+  readonly followsThreadSelection?: true;
   readonly titleSeed?: string;
   readonly runtimeMode: RuntimeMode;
   readonly interactionMode: ProviderInteractionMode;
@@ -941,6 +942,7 @@ export const startThreadTurn = Effect.fn("EnvironmentCommands.startThreadTurn")(
       attachments,
       ...(input.titleSeed === undefined ? {} : { titleSeed: input.titleSeed }),
       ...(input.modelSelection === undefined ? {} : { modelSelection: input.modelSelection }),
+      ...(input.followsThreadSelection === true ? { followsThreadSelection: true } : {}),
       ...(input.sourceProposedPlan === undefined
         ? {}
         : { sourcePlanRef: input.sourceProposedPlan }),

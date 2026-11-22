@@ -1034,8 +1034,6 @@ function nextQueuedRun(
   return queuedRunsInDeliveryOrder(projection).find((run) => run.queueHeld !== true);
 }
 
-// Delegated completions, monitor notifications and unpinned scheduled deliveries never choose a
-// model, so a queued one runs on the thread's current pick rather than the one frozen at queue time.
 function followsCurrentConversation(
   message:
     | Pick<
@@ -1080,12 +1078,15 @@ function queueTailModelSelection(
 }
 
 /**
- * The provider's latest run stopped on its usage limit and nothing ran after it.
- * With `now` (automatic starts), a run on another provider since does not lift
+ * The provider's latest run stopped on its usage limit and no later run completed or reached a provider.
+ * With `now` (automatic starts), a turn on another provider since does not lift
  * a reported reset still in the future; an unknown reset is lifted, as transient 429s are.
  */
 function usageLimitHoldsQueue(
-  projection: Pick<OrchestrationV2ThreadProjection, "runs" | "turnItems" | "providerSessions">,
+  projection: Pick<
+    OrchestrationV2ThreadProjection,
+    "runs" | "turnItems" | "providerSessions" | "providerTurns"
+  >,
   providerInstanceId: ModelSelection["instanceId"],
   now?: DateTime.Utc,
 ): boolean {
@@ -1105,7 +1106,16 @@ function usageLimitHoldsQueue(
     latestSession?.lastError ?? null,
   );
   if (limited === null) return false;
-  if (latestExecutedRun(projection.runs)?.id === limited.id) return true;
+  const acceptedAttempts = new Set(projection.providerTurns.map((turn) => turn.runAttemptId));
+  if (
+    !projection.runs.some(
+      (run) =>
+        (run.status === "completed" ||
+          (run.activeAttemptId !== null && acceptedAttempts.has(run.activeAttemptId))) &&
+        runRanAfter(run, limited),
+    )
+  )
+    return true;
   if (now === undefined) return false;
   const resetAt = latestRootProviderFailure(limited, projection.turnItems)?.resetAt;
   return resetAt != null && Date.parse(resetAt) > DateTime.toEpochMillis(now);
@@ -2555,8 +2565,25 @@ const makeOrchestrator = Effect.fn("orchestrationV2.Orchestrator.layer")(functio
       if (isRuntimeModeAbove(projection.thread.runtimeMode, runtimeModeCeiling?.maxRuntimeMode)) {
         return;
       }
-      // Failed worktree creation would run queued work in the project checkout; wait for the user.
       const failedRun = latestExecutedRun(projection.runs);
+      // A refused switch never took over the conversation, even on a recovery pass.
+      if (
+        options?.userStarted !== true &&
+        failedRun?.status === "failed" &&
+        failedRun.manualContinuationOfRunId !== undefined &&
+        (queuedMessage === undefined || !isBufferedProviderNotification(queuedMessage)) &&
+        projection.runs.some(
+          (run) =>
+            run.id === failedRun.manualContinuationOfRunId &&
+            !modelSelectionsEqual(run.modelSelection, failedRun.modelSelection),
+        ) &&
+        !projection.providerTurns.some(
+          (turn) => turn.runAttemptId !== null && turn.runAttemptId === failedRun.activeAttemptId,
+        )
+      ) {
+        return;
+      }
+      // Failed worktree creation would run queued work in the project checkout; wait for the user.
       const endedRunId = options?.latestRunEnded === true ? failedRun?.id : options?.endedRunId;
       const failedRunId =
         options?.latestRunEnded === true && failedRun?.status === "failed"
@@ -4924,10 +4951,14 @@ const makeOrchestrator = Effect.fn("orchestrationV2.Orchestrator.layer")(functio
       const limitRecords =
         userRuns.length === 0 || latest?.status !== "failed"
           ? null
-          : yield* loadProjectionForCommand(command, ["turnItems", "providerSessions"], {
-              turnItemTypes: ["error"],
-              turnItemRunIds: [latest.id],
-            });
+          : yield* loadProjectionForCommand(
+              command,
+              ["turnItems", "providerSessions", "providerTurns"],
+              {
+                turnItemTypes: ["error"],
+                turnItemRunIds: [latest.id],
+              },
+            );
       const heldBehindLimit =
         limitRecords !== null &&
         userRuns.every((run) =>
@@ -8204,7 +8235,8 @@ const makeOrchestrator = Effect.fn("orchestrationV2.Orchestrator.layer")(functio
         ...(command.senderThreadId === undefined ? {} : { senderThreadId: command.senderThreadId }),
         ...(command.linkedSender === undefined ? {} : { linkedSender: command.linkedSender }),
         ...(command.idleCompaction === undefined ? {} : { idleCompaction: command.idleCompaction }),
-        ...(command.scheduledTaskId !== undefined && command.modelSelection === undefined
+        ...(command.followsThreadSelection === true ||
+        (command.scheduledTaskId !== undefined && command.modelSelection === undefined)
           ? { followsThreadSelection: true as const }
           : {}),
         id: command.messageId,
@@ -15958,7 +15990,7 @@ const makeOrchestrator = Effect.fn("orchestrationV2.Orchestrator.layer")(functio
       case "queue.resume": {
         const projection = yield* loadProjectionForCommand(
           command,
-          ["runs", "turnItems", "providerSessions", "messages"],
+          ["runs", "turnItems", "providerSessions", "providerTurns", "messages"],
           { turnItemTypes: ["error"], messageRoles: ["user"] },
         );
         if (projection.thread.archivedAt !== null || projection.thread.deletedAt !== null) {
@@ -16206,12 +16238,13 @@ const makeOrchestrator = Effect.fn("orchestrationV2.Orchestrator.layer")(functio
     }
 
     // The run-end release can lag behind a new send; start the queue first so the send waits behind it.
-    // A restart continuation resumes the ended run, so it must not be overtaken by the queue.
+    // A continuation resumes the ended run, so it must not be overtaken by the queue.
     // A steer follow-up takes its place first and starts the queue after it commits. A send that
     // beats the run-end reaction places the ended run's unread steers before it starts anything.
     if (
       command.type === "message.dispatch" &&
       command.restartContinuationOfRunId === undefined &&
+      command.manualContinuationOfRunId === undefined &&
       command.steerFollowUpOfRunId === undefined &&
       (command.dispatchMode.type === "start_immediately" ||
         command.dispatchMode.type === "queue_after_active" ||

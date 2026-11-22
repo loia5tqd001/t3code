@@ -658,13 +658,27 @@ export default function ChatView(props: ChatViewProps) {
   const citationLocation = { href: citationHref, key: citationKey };
   const locationCitation = assistantCitationFromLocation(citationLocation.href);
   const citationActivation = citationLocation.key ?? citationLocation.href;
-  const citationRequest = (
+  // Embedded side chats do not react to the main route's saved-message state.
+  const citationRequest: AssistantCitationRequest | null =
     locationCitation &&
     locationCitation.environmentId === environmentId &&
     locationCitation.threadId === threadId
-      ? { citation: locationCitation, key: citationActivation }
-      : null
-  ) as AssistantCitationRequest | null;
+      ? {
+          key: citationActivation,
+          environmentId,
+          threadId,
+          messageId: locationCitation.messageId,
+          citation: locationCitation,
+        }
+      : !embedded && savedMessageNavigation !== null
+        ? {
+            key: savedMessageNavigation.requestId,
+            environmentId,
+            threadId,
+            messageId: savedMessageNavigation.messageId,
+            citation: null,
+          }
+        : null;
   useSideChatCitationReveal(embedded ? null : routeThreadRef, locationCitation, citationActivation);
   const citationHistory = useCitedHistory(citationRequest);
   const { resolvedTheme } = useTheme();
@@ -2264,7 +2278,6 @@ export default function ChatView(props: ChatViewProps) {
     onTimelineFooterGrowStable,
     onIsAtEndChangeStable,
     anchorNewTurn,
-    anchorSavedMessage,
     attachTimelineViewport,
     attachComposerOverlay: attachFollowComposerOverlay,
   } = useTimelineFollow({
@@ -2281,11 +2294,6 @@ export default function ChatView(props: ChatViewProps) {
     timelineAnchorMessageId,
     setTimelineAnchor,
   });
-  // oxlint-disable-next-line t3code/no-unreasoned-state-sync -- consumes one router activation and scrolls the mounted timeline to the saved message's source row
-  useEffect(() => {
-    if (savedMessageNavigation === null || activeThreadKey === null) return;
-    anchorSavedMessage(activeThreadKey, savedMessageNavigation.messageId);
-  }, [activeThreadKey, anchorSavedMessage, savedMessageNavigation]);
 
   useFocusComposerOnThreadOpen(
     activeThreadRef,
@@ -3138,7 +3146,6 @@ export default function ChatView(props: ChatViewProps) {
     currentRouteThreadKeyRef,
     activeThread,
     resumableRunId,
-    hasHeldQueuedRuns,
     canResume,
     isSendBusy,
     isRevertingCheckpoint,

@@ -667,7 +667,7 @@ const ConversationTimeline = memo(function ConversationTimeline({
   );
   const toolCallVisibility =
     findActive && preferredToolCallVisibility === "zen" ? "hideAll" : preferredToolCallVisibility;
-  const revealedMessageId = citationRequest?.citation.messageId ?? null;
+  const revealedMessageId = citationRequest?.messageId ?? null;
   // Imported turns and post-steer work fold under synthetic keys, not the entries' run ids.
   const findFoldRunIds = findActive
     ? timelineTurnFoldRunIdsByEntryId({
@@ -706,9 +706,9 @@ const ConversationTimeline = memo(function ConversationTimeline({
       ? timelineEntries.find(
           (entry) =>
             (entry.kind === "message" &&
-              entry.message.role === "assistant" &&
-              entry.message.id === citationRequest.citation.messageId) ||
-            (entry.kind === "sent-message" && entry.id === citationRequest.citation.messageId),
+              (citationRequest.citation === null || entry.message.role === "assistant") &&
+              entry.message.id === citationRequest.messageId) ||
+            (entry.kind === "sent-message" && entry.id === citationRequest.messageId),
         )
       : undefined;
   if (citationRequest && citedEntry) {
@@ -868,7 +868,8 @@ const ConversationTimeline = memo(function ConversationTimeline({
     phase: citationRequest
       ? resolveCitationPhase({
           history: citationHistory,
-          messageId: citationRequest.citation.messageId,
+          messageId: citationRequest.messageId,
+          wholeMessage: citationRequest.citation === null,
           entries: timelineEntries,
           rows,
         })
@@ -928,7 +929,7 @@ const ConversationTimeline = memo(function ConversationTimeline({
   const anchoredEndSpaceConfig = resolveChatListAnchoredEndSpace(
     rows,
     anchorMessageId,
-    (row) => (row.kind === "message" ? row.message.id : null),
+    (row) => (row.kind === "message" && row.message.role === "user" ? row.message.id : null),
     { anchorOffset: CHAT_TIMELINE_ANCHOR_OFFSET },
   );
   const anchoredEndSpace = anchoredEndSpaceConfig

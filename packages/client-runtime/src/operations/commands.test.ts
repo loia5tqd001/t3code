@@ -353,6 +353,7 @@ describe("V2 environment commands", () => {
         ["steer", "start_immediately"],
         ["restart", "start_immediately"],
       ] as const) {
+        const modelSelection = v2Projection.thread.modelSelection;
         yield* startThreadTurn({
           commandId: CommandId.make(`command-${mode}`),
           threadId: v2ThreadId,
@@ -365,12 +366,15 @@ describe("V2 environment commands", () => {
           runtimeMode: "full-access",
           interactionMode: "default",
           dispatchMode: mode,
+          modelSelection,
+          ...(mode === "queue" ? { followsThreadSelection: true } : {}),
         }).pipe(Effect.provideService(EnvironmentSupervisor.EnvironmentSupervisor, supervisor));
 
         expect(commands.at(-1)).toMatchObject({
           type: "message.dispatch",
+          modelSelection,
           dispatchMode: { type: expectedType },
-          ...(mode === "queue" ? {} : { deliveryIntent: mode }),
+          ...(mode === "queue" ? { followsThreadSelection: true } : { deliveryIntent: mode }),
         });
       }
       expect(projectionRequests).toEqual([]);

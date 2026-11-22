@@ -9,7 +9,10 @@ import {
 } from "./citationProcedure";
 import type { MessagesTimelineRow } from "./MessagesTimeline.logic";
 
-function scriptedHistory(snapshots: ReadonlyArray<CitedThreadSnapshot | null>) {
+function scriptedHistory(
+  snapshots: ReadonlyArray<CitedThreadSnapshot | null>,
+  wholeMessage = false,
+) {
   const controller = new AbortController();
   let reads = 0;
   let loads = 0;
@@ -20,6 +23,7 @@ function scriptedHistory(snapshots: ReadonlyArray<CitedThreadSnapshot | null>) {
     },
     run: (results: ReadonlyArray<"loaded" | "noop" | "error"> = []) =>
       loadCitedHistory({
+        wholeMessage,
         signal: controller.signal,
         readThread: async () => snapshots[Math.min(reads++, snapshots.length - 1)] ?? null,
         loadThrough: async () => {
@@ -58,11 +62,16 @@ describe("loadCitedHistory", () => {
   });
 
   it("rejects a citation that names a user message", async () => {
-    const history = scriptedHistory([{ message: "other", hasMoreHistory: false }]);
+    const history = scriptedHistory([{ message: "user", hasMoreHistory: false }]);
     await expect(history.run()).resolves.toMatchObject({
       _tag: "failed",
       title: "The citation does not refer to an assistant response",
     });
+  });
+
+  it("reveals a whole user message without a quote", async () => {
+    const history = scriptedHistory([{ message: "user", hasMoreHistory: false }], true);
+    await expect(history.run()).resolves.toEqual({ _tag: "found" });
   });
 
   it("stops on a failed page", async () => {
@@ -156,12 +165,14 @@ describe("resolveCitationPhase", () => {
   } as MessagesTimelineRow;
   const phase = (input: {
     history?: "loading" | "found" | "failed";
+    wholeMessage?: boolean;
     entries?: ReadonlyArray<TimelineEntry>;
     rows?: ReadonlyArray<MessagesTimelineRow>;
   }) =>
     resolveCitationPhase({
       history: { _tag: input.history ?? "loading" },
       messageId,
+      wholeMessage: input.wholeMessage ?? false,
       entries: input.entries ?? [],
       rows: input.rows ?? [],
     });
@@ -204,6 +215,7 @@ describe("resolveCitationPhase", () => {
       message: { ...entry.message, role: "user" },
     } as TimelineEntry;
     expect(phase({ entries: [userEntry] })).toEqual({ _tag: "failed" });
+    expect(phase({ entries: [userEntry], wholeMessage: true })).toEqual({ _tag: "expanding" });
   });
 
   it("fails when the history procedure failed", () => {

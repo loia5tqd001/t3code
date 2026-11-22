@@ -155,7 +155,6 @@ export function ThreadDetailsPanel(props: ThreadDetailsPanelProps) {
       ? { onCheckoutPullRequestRequest: props.onCheckoutPullRequestRequest }
       : {}),
   };
-
   return (
     <ThreadDetailsCard
       threadRef={{ environmentId: props.environmentId, threadId: props.threadId }}
@@ -203,51 +202,11 @@ export function ThreadDetailsPanel(props: ThreadDetailsPanelProps) {
           // Also for a project that tracks nothing: a thread can change a submodule.
           repositories: offersGit && density !== "essential" && visible.gitActions,
         };
+        const showActions = props.onOpenSideChat !== undefined || props.onFork !== undefined;
+        const showSideChats = density === "full" && !props.draftId && visible.sideChats;
         return (
           <>
             <div className="group/details-items">
-              {props.onOpenSideChat || props.onFork ? (
-                <ThreadDetailsSection
-                  headingId="thread-details-actions-heading"
-                  title={gt("Thread actions")}
-                  separated={false}
-                  showHeading={false}
-                >
-                  <div className="flex flex-col">
-                    {props.onOpenSideChat ? (
-                      <ThreadDetailsControl
-                        size="sm"
-                        variant="ghost"
-                        part="row"
-                        onClick={props.onOpenSideChat}
-                      >
-                        <MessageSquarePlusIcon
-                          className={THREAD_DETAILS_PANEL_ICON_CLASS}
-                          aria-hidden
-                        />
-                        <span className={THREAD_DETAILS_PANEL_LABEL_CLASS}>
-                          <T>New side chat</T>
-                        </span>
-                      </ThreadDetailsControl>
-                    ) : null}
-                    {props.onFork ? (
-                      <ThreadDetailsControl
-                        size="sm"
-                        variant="ghost"
-                        part="row"
-                        disabled={!props.canFork}
-                        onClick={props.onFork}
-                      >
-                        <GitForkIcon className={THREAD_DETAILS_PANEL_ICON_CLASS} aria-hidden />
-                        <span className={THREAD_DETAILS_PANEL_LABEL_CLASS}>
-                          <T>Fork chat</T>
-                        </span>
-                      </ThreadDetailsControl>
-                    ) : null}
-                  </div>
-                </ThreadDetailsSection>
-              ) : null}
-
               {show.environment || show.openIn || show.scripts ? (
                 <ThreadDetailsSection
                   headingId="thread-details-workspace-heading"
@@ -349,10 +308,6 @@ export function ThreadDetailsPanel(props: ThreadDetailsPanelProps) {
                 </ThreadDetailsSection>
               ) : null}
 
-              {density === "full" && !props.draftId && visible.servers ? (
-                <ThreadServersPanel environmentId={props.environmentId} threadId={props.threadId} />
-              ) : null}
-
               {density === "full" && !props.draftId && visible.automations ? (
                 <ThreadAutomationsPanel
                   environmentId={props.environmentId}
@@ -360,12 +315,12 @@ export function ThreadDetailsPanel(props: ThreadDetailsPanelProps) {
                 />
               ) : null}
 
-              {density === "full" && !props.draftId && (visible.lineage || visible.sideChats) ? (
+              {density === "full" && !props.draftId && visible.lineage ? (
                 <ThreadRelationshipsPanel
                   environmentId={props.environmentId}
                   threadId={props.threadId}
-                  showLineage={visible.lineage}
-                  showSideChats={visible.sideChats}
+                  showLineage
+                  showSideChats={false}
                 />
               ) : null}
 
@@ -393,6 +348,63 @@ export function ThreadDetailsPanel(props: ThreadDetailsPanelProps) {
                   </span>
                 </ThreadDetailsControl>
               </div>
+
+              {showActions || showSideChats ? (
+                <div className="border-t border-border/65" data-thread-details-actions>
+                  {showActions ? (
+                    <ThreadDetailsSection
+                      headingId="thread-details-actions-heading"
+                      title={gt("Thread actions")}
+                      showHeading={false}
+                    >
+                      <div className="flex flex-col">
+                        {props.onOpenSideChat ? (
+                          <ThreadDetailsControl
+                            size="sm"
+                            variant="ghost"
+                            part="row"
+                            onClick={props.onOpenSideChat}
+                          >
+                            <MessageSquarePlusIcon
+                              className={THREAD_DETAILS_PANEL_ICON_CLASS}
+                              aria-hidden
+                            />
+                            <span className={THREAD_DETAILS_PANEL_LABEL_CLASS}>
+                              <T>New side chat</T>
+                            </span>
+                          </ThreadDetailsControl>
+                        ) : null}
+                        {props.onFork ? (
+                          <ThreadDetailsControl
+                            size="sm"
+                            variant="ghost"
+                            part="row"
+                            disabled={!props.canFork}
+                            onClick={props.onFork}
+                          >
+                            <GitForkIcon className={THREAD_DETAILS_PANEL_ICON_CLASS} aria-hidden />
+                            <span className={THREAD_DETAILS_PANEL_LABEL_CLASS}>
+                              <T>Fork chat</T>
+                            </span>
+                          </ThreadDetailsControl>
+                        ) : null}
+                      </div>
+                    </ThreadDetailsSection>
+                  ) : null}
+                  {showSideChats ? (
+                    <ThreadRelationshipsPanel
+                      environmentId={props.environmentId}
+                      threadId={props.threadId}
+                      showLineage={false}
+                      showSideChats
+                    />
+                  ) : null}
+                </div>
+              ) : null}
+
+              {density === "full" && !props.draftId && visible.servers ? (
+                <ThreadServersPanel environmentId={props.environmentId} threadId={props.threadId} />
+              ) : null}
             </div>
 
             <Menu

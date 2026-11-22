@@ -1,4 +1,5 @@
 import {
+  type DiscoveredLocalServer,
   EnvironmentId,
   ProjectId,
   ThreadId,
@@ -9,12 +10,15 @@ import { AsyncResult, Atom } from "effect/reactivity";
 import { expect, it, vi } from "vite-plus/test";
 import { page, userEvent } from "vite-plus/test/browser";
 
+import "~/index.css";
+
 const SCRATCH_ROOT = "/home/user/.t3/scratch";
 
 const state = vi.hoisted(() => ({
   workspaceRoot: "",
   folder: "",
   pullRequests: [] as unknown[],
+  servers: [] as Array<{ pid: number; port: number }>,
   configLoaded: true,
 }));
 
@@ -80,6 +84,19 @@ vi.mock(import("~/state/vcs"), async (importOriginal) => {
     vcsEnvironment: { ...actual.vcsEnvironment, status: (() => notARepo) as never },
   };
 });
+vi.mock(import("~/portDiscoveryState"), async (importOriginal) => ({
+  ...(await importOriginal()),
+  useThreadDiscoveredPorts: () =>
+    state.servers.map(({ pid, port }): DiscoveredLocalServer => ({
+      host: "localhost",
+      pid,
+      port,
+      url: `http://localhost:${port}`,
+      terminal: null,
+      agent: null,
+      processName: "node",
+    })),
+}));
 
 import { render } from "../../../test/render";
 import { useRightPanelStore } from "../../rightPanelStore";
@@ -109,12 +126,14 @@ function setup(input: {
   workspaceRoot: string;
   folder: string;
   pullRequests?: ThreadPullRequestLink[];
+  servers?: Array<{ pid: number; port: number }>;
   configLoaded?: boolean;
 }) {
   state.configLoaded = input.configLoaded ?? true;
   state.workspaceRoot = input.workspaceRoot;
   state.folder = input.folder;
   state.pullRequests = input.pullRequests ?? [];
+  state.servers = input.servers ?? [];
   useRightPanelStore.setState({ threadPanelVisibilityByThreadKey: {} });
   const anchor = document.createElement("div");
   document.body.append(anchor);
@@ -241,6 +260,31 @@ it("offers side chat and fork from the thread details panel", async () => {
 
   expect(onOpenSideChat).toHaveBeenCalledOnce();
   expect(onFork).toHaveBeenCalledOnce();
+});
+
+it("separates thread actions and leaves servers last", async () => {
+  using fixture = setup({
+    workspaceRoot: "/work/plain",
+    folder: "/work/plain",
+    servers: [{ pid: 1, port: 3000 }],
+  });
+  await using screen = await render(
+    <Panel
+      fixture={fixture}
+      actions={{ onOpenSideChat: vi.fn(), onFork: vi.fn(), canFork: true }}
+    />,
+  );
+
+  const actions = screen.getByText("New side chat").element().closest("section");
+  const servers = screen.getByRole("region", { name: "Servers" }).element();
+  if (!actions) throw new Error("Expected thread actions to render in a section");
+
+  const actionGroup = actions.closest("[data-thread-details-actions]");
+  if (!actionGroup) throw new Error("Expected thread actions to render in their group");
+
+  expect(window.getComputedStyle(actionGroup).borderTopWidth).toBe("1px");
+  expect(servers.parentElement?.lastElementChild).toBe(servers);
+  expect(actionGroup.compareDocumentPosition(servers)).toBe(Node.DOCUMENT_POSITION_FOLLOWING);
 });
 
 it("disables fork until the thread has a stable run", async () => {

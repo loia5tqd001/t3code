@@ -2,6 +2,7 @@ import type { ChatComposerProps } from "./ChatComposer";
 import type { PromptUltrathink } from "./TraitsPicker";
 import type { ProviderInstanceEntry } from "../../providerInstances";
 import { type AppModelOption } from "../../modelSelection";
+import type { ContextWindowSnapshot } from "@t3tools/client-runtime/state/context-window";
 import { useGT, useMessages } from "gt-react";
 import { CircleAlertIcon } from "lucide-react";
 import { CompactComposerControlsMenu } from "./CompactComposerControlsMenu";
@@ -31,6 +32,7 @@ import {
 } from "./ComposerModelEffort";
 import type { useComposerProviderModel } from "./useComposerProviderModel";
 import { resolveComposerControlsOwnership } from "./composerControlsOwnership";
+import { ComposerContextUsage } from "./ComposerContextUsage";
 
 /**
  * The composer footer controls: the model picker (which also holds effort, speed and
@@ -62,6 +64,7 @@ export function ComposerControlsBar(props: {
   compatibleRuntimeModeOptions: ReadonlyArray<RuntimeModeOption>;
   handleRuntimeModeChange: (mode: RuntimeMode) => void;
   composerControlsCollapsed: boolean;
+  contextWindow: ContextWindowSnapshot | null;
   composerControlsHidden: boolean;
   restingHiddenBlockCount: number;
   iconOnlyBlockCount: number;
@@ -106,6 +109,7 @@ export function ComposerControlsBar(props: {
     compatibleRuntimeModeOptions,
     handleRuntimeModeChange,
     composerControlsCollapsed,
+    contextWindow,
     composerControlsHidden,
     restingHiddenBlockCount: measuredHiddenBlockCount,
     iconOnlyBlockCount,
@@ -290,6 +294,7 @@ export function ComposerControlsBar(props: {
             </div>
           );
         })}
+        <ComposerContextUsage usage={contextWindow} size={controlSize} />
         <div
           data-resting-controls-overflow
           aria-hidden={hiddenRestingBlockIds.length === 0 || undefined}

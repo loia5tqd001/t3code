@@ -255,6 +255,7 @@ import { useManagedPolicy } from "../../state/managedPolicy";
 import { hasProviderSetup } from "./ProviderStatusBanner";
 import { type AppModelOption, getAppModelOptionsForInstance } from "../../modelSelection";
 import type { UnifiedSettings } from "@t3tools/contracts/settings";
+import type { ContextWindowSnapshot } from "@t3tools/client-runtime/state/context-window";
 import { isVideoAttachment, type SessionPhase, type Thread } from "../../types";
 import { type ComposerPromptHistoryPosition } from "./composerPromptHistory";
 import { usePendingUserInputDraft } from "./usePendingThreadRequests";
@@ -391,6 +392,7 @@ export interface ChatComposerProps {
   isPreparingWorktree: boolean;
   canSteer: boolean;
   bannerItems: readonly ComposerBannerStackItem[];
+  contextWindow: ContextWindowSnapshot | null;
   resumeCompactionTokens: number | null;
   keepFullHistory: boolean;
   onToggleKeepFullHistory: () => void;
@@ -2524,6 +2526,7 @@ export const ChatComposer = memo(function ChatComposer(props: ChatComposerProps)
       effortDisplay={settings.effortDisplay}
       permissionsShownInStrip={props.permissionsShownInStrip}
       composerControlsHidden={composerControlsHidden}
+      contextWindow={props.contextWindow}
       restingHiddenBlockCount={restingHiddenBlockCount}
       iconOnlyBlockCount={iconOnlyBlockCount}
       showProviderUnavailable={showProviderUnavailable}

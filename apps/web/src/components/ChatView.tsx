@@ -3892,6 +3892,7 @@ export default function ChatView(props: ChatViewProps) {
                                     ? EMPTY_COMPOSER_BANNER_ITEMS
                                     : composerBannerItems
                                 }
+                                contextWindow={activeContextWindow}
                                 resumeCompactionTokens={resumeCompactionTokens}
                                 keepFullHistory={keepFullHistory}
                                 onToggleKeepFullHistory={toggleKeepFullHistoryStable}

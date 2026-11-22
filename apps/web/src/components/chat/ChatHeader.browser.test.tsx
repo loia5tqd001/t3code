@@ -24,7 +24,7 @@ vi.mock(import("~/hooks/useThreadActionMenu"), () => ({
 import { render, stubGlobal } from "../../../test/render";
 import { ChatHeader } from "./ChatHeader";
 
-function header(title: string) {
+function header(title: string, onOpenSideChat?: () => void) {
   return (
     <>
       <ChatHeader
@@ -37,6 +37,7 @@ function header(title: string) {
         onOpenThread={() => {}}
         rightPanelOpen={false}
         onNewThreadInProject={() => {}}
+        {...(onOpenSideChat ? { onOpenSideChat } : {})}
       />
       <div tabIndex={0}>Outside rename</div>
     </>
@@ -79,6 +80,14 @@ it("opens the thread menu on a desktop title click without waiting", async () =>
   await using screen = await render(header("New thread"));
   await screen.getByRole("button", { name: "Thread actions for New thread" }).click();
   expect(openMenu).toHaveBeenCalledOnce();
+});
+
+it("keeps thread creation actions out of the title bar", async () => {
+  await using screen = await render(header("New thread", () => {}));
+  await expect
+    .element(screen.getByRole("button", { name: "New side chat" }))
+    .not.toBeInTheDocument();
+  await expect.element(screen.getByRole("button", { name: "Fork chat" })).not.toBeInTheDocument();
 });
 
 it("keeps the Escape that cancels a rename from also reaching window shortcuts", async () => {

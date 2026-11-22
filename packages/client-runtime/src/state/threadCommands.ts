@@ -47,6 +47,7 @@ import {
   setThreadInteractionMode,
   setThreadRuntimeMode,
   pinThread,
+  prepareThreadWorkspace,
   reorderPinnedThread,
   reorderActiveThread,
   setThreadAutoSettle,
@@ -196,6 +197,12 @@ export function createThreadEnvironmentAtoms<R, E>(
     create: createEnvironmentCommand(runtime, {
       label: "environment-data:commands:thread:create",
       execute: createThread,
+      scheduler,
+      concurrency,
+    }),
+    prepareWorkspace: createEnvironmentCommand(runtime, {
+      label: "environment-data:commands:thread:prepare-workspace",
+      execute: prepareThreadWorkspace,
       scheduler,
       concurrency,
     }),

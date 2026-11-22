@@ -12460,5 +12460,19 @@
   "b7df38b7d8792d78": "Ouvrir le guide",
   "9e91e9a77b664e4e": "Impossible de démarrer un guide de revue",
   "d8aaf932f90429c4": "Placer cette commande en tête de la file d’attente ({shortcut})",
-  "425ab15036aec8a4": "Placer cette commande en tête de la file d’attente"
+  "425ab15036aec8a4": "Placer cette commande en tête de la file d’attente",
+  "b27e585acbecf3a7": "Nouveau chat latéral",
+  "35ce7c3a4495637e": "Créer un fork du chat",
+  "6914e4e380b0678d": "Créer un fork du chat dans un nouvel espace de travail",
+  "593fdae044ac8953": "Créer un fork",
+  "9686ccce847c2a29": "Impossible de créer un fork de ce chat.",
+  "3003763276c0e534": "Ce chat doit avoir une branche avant de pouvoir créer un fork dans un nouvel espace de travail.",
+  "fcce096cac895be5": "Le fork a été créé, mais il n'a pas atteint ce client.",
+  "080b9d5c3c156aed": "Le fork a été créé, mais il n'a pas pu être ouvert.",
+  "a5e9d692cae62612": "Impossible d'ouvrir le fork.",
+  "092e0438e9ae521e": "Ce chat doit avoir une réponse terminée avant de pouvoir créer un fork.",
+  "b56ae895e3ada6b3": "Le fork a été créé, mais son nouvel espace de travail n'a pas atteint ce client.",
+  "a169d282a060cf4d": "Fil : Nouveau chat latéral",
+  "b96e01e200efbb9c": "Fil : Créer un fork",
+  "4523e1fe87eda93e": "Fil : Créer un fork dans un nouvel espace de travail"
 }

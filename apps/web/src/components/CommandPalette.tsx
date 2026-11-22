@@ -70,9 +70,11 @@ import {
   FolderGit2Icon,
   FolderIcon,
   FolderPlusIcon,
+  GitBranchIcon,
   MessageSquareDashedIcon,
   LinkIcon,
   MessageSquareIcon,
+  MessageSquarePlusIcon,
   PaletteIcon,
   RotateCcwIcon,
   SettingsIcon,
@@ -270,6 +272,9 @@ import { openLinkPullRequestDialog } from "./pullRequest/LinkPullRequestDialog";
 import { canShareWithGuestAtom } from "./chat/guestShareAvailability";
 import { openGuestShareDialog } from "./chat/guestShareDialogState";
 import { openUseInAnotherApp } from "./mcp/UseInAnotherAppDialog";
+import { useSideChat } from "./chat/useSideChat";
+import { useForkThread } from "./chat/useForkThread";
+import { forkableRunId } from "../lib/forkThread";
 import { ProjectContentSearchDialog } from "./search/ProjectContentSearchDialog";
 import { settingsForThisPlatform, SETTINGS_SECTION_LABELS } from "./settings/settingsSearch";
 import { primaryServerKeybindingsAtom } from "../state/server";
@@ -502,6 +507,26 @@ function OpenCommandPaletteDialog(props: {
   const availableSettingsSearchItems = useAvailableSettingsSearchItems();
   const { activeDraftThread, activeThread, defaultProjectRef, handleNewThread } =
     useHandleNewThread();
+  const activeThreadServerConfig = useServerConfigs().get(
+    activeThread?.environmentId ?? ("" as EnvironmentId),
+  );
+  const sideChat = useSideChat({
+    threadRef:
+      activeThread &&
+      activeThread.lineage.sideChat !== true &&
+      activeThread.lineage.relationshipToParent !== "subagent" &&
+      activeThreadServerConfig?.environment.capabilities.sideChats === true
+        ? scopeThreadRef(activeThread.environmentId, activeThread.id)
+        : null,
+    readSettings: () => ({
+      runtimeMode: activeThread?.runtimeMode ?? "full-access",
+      modelSelection: activeThread?.modelSelection,
+    }),
+    onError: (message) => toastManager.add({ type: "error", title: message }),
+  });
+  const forkThread = useForkThread({
+    onError: (message) => toastManager.add({ type: "error", title: message }),
+  });
   const paletteRouteTarget = useThreadRouteTarget();
   const projects = useProjects();
   const referenceThreadRef =
@@ -513,9 +538,6 @@ function OpenCommandPaletteDialog(props: {
         ? scopeThreadRef(activeThread.environmentId, activeThread.id)
         : null;
   const openPanelPullRequestUrl = useOpenPanelPullRequestUrl(referenceThreadRef);
-  const activeThreadServerConfig = useServerConfigs().get(
-    activeThread?.environmentId ?? ("" as EnvironmentId),
-  );
   const canShareActiveThreadWithGuest = useAtomValue(
     canShareWithGuestAtom(activeThread?.environmentId ?? ("" as EnvironmentId)),
   );
@@ -1417,6 +1439,68 @@ function OpenCommandPaletteDialog(props: {
         openThreadFind(activeThreadKey);
       },
     });
+  }
+
+  if (activeThread && activeThreadServerConfig?.environment.capabilities.sideChats === true) {
+    actionItems.push({
+      kind: "action",
+      value: "action:new-side-chat",
+      searchTerms: ["side chat", "sidechat", "fork", "ask", "new"],
+      title: gt("New side chat"),
+      icon: <MessageSquarePlusIcon className={ITEM_ICON_CLASS} />,
+      shortcutCommand: "thread.newSideChat",
+      run: async () => {
+        await sideChat.open();
+      },
+    });
+  }
+
+  if (activeThread) {
+    const runId = forkableRunId(activeThread.latestRun, activeThread.runtime);
+    const project = projects.find(
+      (candidate) =>
+        candidate.environmentId === activeThread.environmentId &&
+        candidate.id === activeThread.projectId,
+    );
+    if (runId !== null) {
+      actionItems.push({
+        kind: "action",
+        value: "action:fork-chat",
+        searchTerms: ["fork", "chat", "branch", "new"],
+        title: gt("Fork chat"),
+        icon: <GitBranchIcon className={ITEM_ICON_CLASS} />,
+        shortcutCommand: "thread.fork",
+        run: async () => {
+          await forkThread.forkSameWorkspace({
+            threadRef: scopeThreadRef(activeThread.environmentId, activeThread.id),
+            runId,
+            title: `${activeThread.title} fork`,
+          });
+        },
+      });
+      if (project && activeThread.branch) {
+        actionItems.push({
+          kind: "action",
+          value: "action:fork-chat-new-worktree",
+          searchTerms: ["fork", "chat", "worktree", "new", "branch"],
+          title: gt("Fork chat in new worktree"),
+          icon: <FolderPlusIcon className={ITEM_ICON_CLASS} />,
+          shortcutCommand: "thread.forkInNewWorktree",
+          run: async () => {
+            await forkThread.forkInNewWorktree({
+              threadRef: scopeThreadRef(activeThread.environmentId, activeThread.id),
+              runId,
+              title: `${activeThread.title} fork`,
+              projectRef: scopeProjectRef(activeThread.environmentId, activeThread.projectId),
+              branch: activeThread.branch,
+              modelSelection: activeThread.modelSelection,
+              runtimeMode: activeThread.runtimeMode,
+              interactionMode: activeThread.interactionMode,
+            });
+          },
+        });
+      }
+    }
   }
 
   if (activeThreadPreviewOpen && previewBridge) {

@@ -56,6 +56,7 @@ interface ChatHeaderProps {
   onOpenThread: (threadId: ThreadId) => void;
   rightPanelOpen: boolean;
   onNewThreadInProject: () => void;
+  onOpenSideChat?: (() => void) | undefined;
   onOpenProjectSettings?: (() => void) | undefined;
   onFindInThread?: ((threadRef: ScopedThreadRef) => void) | undefined;
 }
@@ -81,6 +82,7 @@ export const ChatHeader = memo(function ChatHeader({
   onOpenThread,
   rightPanelOpen,
   onNewThreadInProject,
+  onOpenSideChat,
   onOpenProjectSettings,
   onFindInThread,
 }: ChatHeaderProps) {
@@ -205,6 +207,7 @@ export const ChatHeader = memo(function ChatHeader({
     onStartRename: startRename,
     onFind: onFindInThread,
     canShareWithGuest,
+    onOpenSideChat,
   });
   const openMenuFromTitle = (event: ReactMouseEvent<HTMLButtonElement>) => {
     if (isTrailingDoubleClick(event.detail)) return;

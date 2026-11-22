@@ -12469,5 +12469,19 @@
   "b7df38b7d8792d78": "Open guide",
   "9e91e9a77b664e4e": "Could not start a review guide",
   "d8aaf932f90429c4": "Move this command to the front of the queue ({shortcut})",
-  "425ab15036aec8a4": "Move this command to the front of the queue"
+  "425ab15036aec8a4": "Move this command to the front of the queue",
+  "b27e585acbecf3a7": "New side chat",
+  "35ce7c3a4495637e": "Fork chat",
+  "6914e4e380b0678d": "Fork chat in new worktree",
+  "593fdae044ac8953": "Fork",
+  "9686ccce847c2a29": "Could not fork this chat.",
+  "3003763276c0e534": "This chat needs a branch before it can be forked into a new worktree.",
+  "fcce096cac895be5": "The fork was created, but it did not reach this client.",
+  "080b9d5c3c156aed": "The fork was created, but it could not be opened.",
+  "a5e9d692cae62612": "The fork could not be opened.",
+  "092e0438e9ae521e": "This chat needs a completed response before it can be forked.",
+  "b56ae895e3ada6b3": "The fork was created, but its new worktree did not reach this client.",
+  "a169d282a060cf4d": "Thread: New Side Chat",
+  "b96e01e200efbb9c": "Thread: Fork",
+  "4523e1fe87eda93e": "Thread: Fork in New Worktree"
 }

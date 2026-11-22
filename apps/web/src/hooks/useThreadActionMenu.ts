@@ -51,6 +51,8 @@ import { useCopyToClipboard } from "./useCopyToClipboard";
 import { useNewThreadHandler } from "./useHandleNewThread";
 import { useClientSettings } from "./useSettings";
 import { canTurnThreadIntoProject, useThreadActions } from "./useThreadActions";
+import { useForkThread } from "../components/chat/useForkThread";
+import { forkableRunId } from "../lib/forkThread";
 
 function failureToast(title: string, error: unknown) {
   toastManager.add(
@@ -68,8 +70,9 @@ export function useThreadActionMenu(input: {
   readonly onStartRename: () => void;
   readonly onFind?: ((threadRef: ScopedThreadRef) => void) | undefined;
   readonly canShareWithGuest: boolean;
+  readonly onOpenSideChat?: (() => void) | undefined;
 }) {
-  const { threadRef, projectCwd, onStartRename, onFind, canShareWithGuest } = input;
+  const { threadRef, projectCwd, onStartRename, onFind, canShareWithGuest, onOpenSideChat } = input;
   const router = useRouter();
   const projects = useProjects();
   const primaryEnvironmentId = usePrimaryEnvironmentId();
@@ -96,6 +99,11 @@ export function useThreadActionMenu(input: {
     reportFailure: false,
   });
   const handleNewThread = useNewThreadHandler();
+  const { forkSameWorkspace, forkInNewWorktree } = useForkThread({
+    onError: (message) => {
+      if (threadRef) failureToast(m(msg("Could not fork this chat.")), new Error(message));
+    },
+  });
   const confirmThreadDelete = useClientSettings((s) => s.confirmThreadDelete);
   const confirmThreadArchive = useClientSettings((s) => s.confirmThreadArchive);
   const timestampFormat = useClientSettings((s) => s.timestampFormat);
@@ -137,6 +145,7 @@ export function useThreadActionMenu(input: {
         titleRegeneration: configLoaded,
       };
       const isRegeneratingTitle = thread.titleRegeneration != null;
+      const runId = forkableRunId(thread.latestRun, thread.runtime);
       const snoozePresets = resolveSnoozePresets(now, timestampFormat, threadRef.environmentId);
       const items = buildThreadActionMenuItems({
         canOperate: readEnvironmentScope(threadRef.environmentId, AuthOrchestrationOperateScope),
@@ -154,6 +163,8 @@ export function useThreadActionMenu(input: {
         snoozePresets,
         canShareWithGuest,
         canTurnIntoProject: canTurnThreadIntoProject(threadRef),
+        canFork: onOpenSideChat !== undefined,
+        latestStableRunId: runId,
       });
       const clicked = await settlePromise(() => api.contextMenu.show(items, position));
       if (clicked._tag === "Failure" || clicked.value === null) return;
@@ -256,6 +267,42 @@ export function useThreadActionMenu(input: {
         case "rename":
           onStartRename();
           return;
+        case "new-side-chat":
+          onOpenSideChat?.();
+          return;
+        case "fork-current-workspace":
+          await forkSameWorkspace({
+            threadRef,
+            runId,
+            title: `${thread.title} fork`,
+          });
+          return;
+        case "fork-new-worktree": {
+          const project = projects.find(
+            (candidate) =>
+              candidate.environmentId === thread.environmentId && candidate.id === thread.projectId,
+          );
+          if (!project || !thread.branch || !thread.modelSelection) {
+            failureToast(
+              m(msg("Could not fork this chat.")),
+              new Error(
+                m(msg("This chat needs a branch before it can be forked into a new worktree.")),
+              ),
+            );
+            return;
+          }
+          await forkInNewWorktree({
+            threadRef,
+            runId,
+            title: `${thread.title} fork`,
+            projectRef: scopeProjectRef(thread.environmentId, thread.projectId),
+            branch: thread.branch,
+            modelSelection: thread.modelSelection,
+            runtimeMode: thread.runtimeMode,
+            interactionMode: thread.interactionMode,
+          });
+          return;
+        }
         case "regenerate-title": {
           if (isRegeneratingTitle) return;
           const toast = titleRegenerationToast([

@@ -12467,5 +12467,19 @@
   "b7df38b7d8792d78": "Öppna guiden",
   "9e91e9a77b664e4e": "Kunde inte starta en granskningsguide",
   "d8aaf932f90429c4": "Flytta det här kommandot först i kön ({shortcut})",
-  "425ab15036aec8a4": "Flytta det här kommandot först i kön"
+  "425ab15036aec8a4": "Flytta det här kommandot först i kön",
+  "b27e585acbecf3a7": "Ny sidochatt",
+  "35ce7c3a4495637e": "Forka chatt",
+  "6914e4e380b0678d": "Forka chatt i ny worktree",
+  "593fdae044ac8953": "Forka",
+  "9686ccce847c2a29": "Det gick inte att forka den här chatten.",
+  "3003763276c0e534": "Den här chatten behöver en gren innan den kan forkas i en ny worktree.",
+  "fcce096cac895be5": "Forken skapades, men nådde inte den här klienten.",
+  "080b9d5c3c156aed": "Forken skapades, men kunde inte öppnas.",
+  "a5e9d692cae62612": "Det gick inte att öppna forken.",
+  "092e0438e9ae521e": "Den här chatten behöver ett slutfört svar innan den kan forkas.",
+  "b56ae895e3ada6b3": "Forken skapades, men dess nya worktree nådde inte den här klienten.",
+  "a169d282a060cf4d": "Tråd: Ny sidochatt",
+  "b96e01e200efbb9c": "Tråd: Forka",
+  "4523e1fe87eda93e": "Tråd: Forka i ny worktree"
 }

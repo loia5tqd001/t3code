@@ -313,6 +313,8 @@ import { getTriggerDisplayModelName } from "./chat/providerIconUtils";
 import { resolveScrollToEndClearance } from "./composerFooterLayout";
 import { ChatHeader } from "./chat/ChatHeader";
 import { useSideChat } from "./chat/useSideChat";
+import { useForkThread } from "./chat/useForkThread";
+import { forkableRunId } from "../lib/forkThread";
 import { sideThreadComposer, sideThreadKindOf } from "@t3tools/client-runtime/side-thread";
 import { useOpenSurfaceInMainView } from "../hooks/useOpenSurfaceInMainView";
 import { useRemoteOpenState } from "~/remoteOpen";
@@ -2874,6 +2876,15 @@ export default function ChatView(props: ChatViewProps) {
       ...terminalShortcuts,
       ...rightPanelShortcuts,
       ...threadLifecycleShortcuts,
+      "thread.newSideChat": ({ event }) => {
+        if (!event.repeat) openSideChatStable();
+      },
+      "thread.fork": ({ event }) => {
+        if (!event.repeat) forkActiveThreadStable();
+      },
+      "thread.forkInNewWorktree": ({ event }) => {
+        if (!event.repeat) forkActiveThreadInNewWorktreeStable();
+      },
       "thread.copyReference": ({ event }) => {
         if (!event.repeat) copyActiveThreadReference();
       },
@@ -2981,6 +2992,32 @@ export default function ChatView(props: ChatViewProps) {
                 ? gt("Available once the thread's worktree is set up.")
                 : null;
   const openSideChatStable = useStableCallback(() => void sideChat.open());
+  const { forkSameWorkspace, forkInNewWorktree } = useForkThread({
+    onError: (message) => {
+      if (activeThread) setThreadError(activeThread.id, message);
+    },
+  });
+  const forkActiveThreadStable = useStableCallback(() => {
+    if (!activeThread || !activeThreadRef) return;
+    void forkSameWorkspace({
+      threadRef: activeThreadRef,
+      runId: forkableRunId(activeLatestRun, activeRuntime),
+      title: `${activeThread.title} fork`,
+    });
+  });
+  const forkActiveThreadInNewWorktreeStable = useStableCallback(() => {
+    if (!activeThread || !activeThreadRef || !activeProject) return;
+    void forkInNewWorktree({
+      threadRef: activeThreadRef,
+      runId: forkableRunId(activeLatestRun, activeRuntime),
+      title: `${activeThread.title} fork`,
+      projectRef: scopeProjectRef(activeThread.environmentId, activeThread.projectId),
+      branch: activeThread.branch,
+      modelSelection: activeThread.modelSelection,
+      runtimeMode: activeThread.runtimeMode,
+      interactionMode: activeThread.interactionMode,
+    });
+  });
   const openSurfaceInMainView = useOpenSurfaceInMainView(activeThreadRef);
   const sendSideChatStable = useStableCallback(sideChat.open);
   const { onConfirmRevertStable, onForkFromRunStable, onRevertTimelineTurnStable } =
@@ -3521,6 +3558,7 @@ export default function ChatView(props: ChatViewProps) {
               onOpenThread={onOpenRelatedThreadStable}
               rightPanelOpen={inlineRightPanelOwnsTitleBar}
               onNewThreadInProject={handleNewThreadInActiveProjectStable}
+              {...(sideChatsOffered ? { onOpenSideChat: openSideChatStable } : {})}
               {...(activeDraftLogicalProjectKey
                 ? { onOpenProjectSettings: handleOpenDraftProjectSettingsStable }
                 : {})}
@@ -4098,6 +4136,13 @@ export default function ChatView(props: ChatViewProps) {
                   onAddProjectScript={saveProjectScriptStable}
                   onUpdateProjectScript={updateProjectScriptStable}
                   onDeleteProjectScript={deleteProjectScriptStable}
+                  {...(sideChatsOffered ? { onOpenSideChat: openSideChatStable } : {})}
+                  {...(isServerThread
+                    ? {
+                        onFork: forkActiveThreadStable,
+                        canFork: forkableRunId(activeLatestRun, activeRuntime) !== null,
+                      }
+                    : {})}
                   usage={{
                     providerInstanceId: activeProviderInstanceId,
                     model: activeUsageModel,

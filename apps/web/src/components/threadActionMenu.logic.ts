@@ -21,6 +21,10 @@ export type ThreadActionMenuId =
   | `snooze:${string}`
   | "unsnooze"
   | "rename"
+  | "new-side-chat"
+  | "fork"
+  | "fork-current-workspace"
+  | "fork-new-worktree"
   | "regenerate-title"
   | "mark-unread"
   | "share-guest"
@@ -123,6 +127,10 @@ export interface ThreadActionMenuState {
   readonly canShareWithGuest?: boolean;
   /** A No project thread with its own folder, on a server that can promote it. */
   readonly canTurnIntoProject?: boolean;
+  /** Older servers cannot create the hidden child or prepare a separate worktree. */
+  readonly canFork?: boolean;
+  /** The source point a fork can use; null while the latest turn is still running. */
+  readonly latestStableRunId?: string | null;
 }
 
 /** Local navigation, read markers, and copying remain available to read-only clients. */
@@ -130,6 +138,10 @@ export function threadActionRequiresOperate(action: ThreadActionMenuId): boolean
   return ![
     "find",
     "new-thread-on-branch",
+    "fork",
+    "fork-current-workspace",
+    "fork-new-worktree",
+    "new-side-chat",
     "project-settings",
     "mark-unread",
     "share-guest",
@@ -207,6 +219,34 @@ export function buildThreadActionMenuItems(
       disabled: state.canRename === false,
       separatorBefore: true,
     },
+    ...(state.canFork === true
+      ? [
+          {
+            id: "new-side-chat" as const,
+            label: resolve(msg("New side chat")),
+            icon: "message-square-plus",
+          },
+          {
+            id: "fork" as const,
+            label: resolve(msg("Fork")),
+            icon: "git-branch",
+            children: [
+              {
+                id: "fork-current-workspace" as const,
+                label: resolve(msg("Fork chat")),
+                icon: "message-square",
+                disabled: state.latestStableRunId == null,
+              },
+              {
+                id: "fork-new-worktree" as const,
+                label: resolve(msg("Fork chat in new worktree")),
+                icon: "folder-plus",
+                disabled: state.latestStableRunId == null || state.branch === null,
+              },
+            ],
+          },
+        ]
+      : []),
     ...(state.supports.titleRegeneration
       ? [
           {

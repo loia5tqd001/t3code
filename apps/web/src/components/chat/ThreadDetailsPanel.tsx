@@ -41,7 +41,7 @@ import { filesystemEnvironment } from "../../state/filesystem";
 import { useEnvironmentQuery } from "../../state/query";
 import { ThreadDetailsThreadPrRows } from "./ThreadDetailsPrRows";
 import { cn } from "../../lib/utils";
-import { SlidersHorizontalIcon } from "lucide-react";
+import { GitForkIcon, MessageSquarePlusIcon, SlidersHorizontalIcon } from "lucide-react";
 import { ThreadDetailsControl } from "./ThreadDetailsControl";
 import {
   THREAD_DETAILS_PANEL_ICON_CLASS,
@@ -92,6 +92,9 @@ interface ThreadDetailsPanelProps extends Pick<
     input: NewProjectScriptInput,
   ) => Promise<ProjectScriptActionResult>;
   onDeleteProjectScript: (scriptId: string) => Promise<ProjectScriptActionResult>;
+  onOpenSideChat?: (() => void) | undefined;
+  onFork?: (() => void) | undefined;
+  canFork?: boolean;
   usage: ThreadDetailsUsageInput;
 }
 
@@ -158,9 +161,11 @@ export function ThreadDetailsPanel(props: ThreadDetailsPanelProps) {
       threadRef={{ environmentId: props.environmentId, threadId: props.threadId }}
       anchor={props.anchor}
       handle={props.handle}
-      contentKey={THREAD_DETAILS_ITEMS.filter((item) => visible[item.id])
-        .map((item) => item.id)
-        .join(",")}
+      contentKey={[
+        ...THREAD_DETAILS_ITEMS.filter((item) => visible[item.id]).map((item) => item.id),
+        ...(props.onOpenSideChat ? ["side-chat"] : []),
+        ...(props.onFork ? ["fork"] : []),
+      ].join(",")}
       onContextMenu={(event) => {
         // Popups the card opens bubble here through React; they, fields, links, and selected text
         // keep their own menus.
@@ -201,6 +206,48 @@ export function ThreadDetailsPanel(props: ThreadDetailsPanelProps) {
         return (
           <>
             <div className="group/details-items">
+              {props.onOpenSideChat || props.onFork ? (
+                <ThreadDetailsSection
+                  headingId="thread-details-actions-heading"
+                  title={gt("Thread actions")}
+                  separated={false}
+                  showHeading={false}
+                >
+                  <div className="flex flex-col">
+                    {props.onOpenSideChat ? (
+                      <ThreadDetailsControl
+                        size="sm"
+                        variant="ghost"
+                        part="row"
+                        onClick={props.onOpenSideChat}
+                      >
+                        <MessageSquarePlusIcon
+                          className={THREAD_DETAILS_PANEL_ICON_CLASS}
+                          aria-hidden
+                        />
+                        <span className={THREAD_DETAILS_PANEL_LABEL_CLASS}>
+                          <T>New side chat</T>
+                        </span>
+                      </ThreadDetailsControl>
+                    ) : null}
+                    {props.onFork ? (
+                      <ThreadDetailsControl
+                        size="sm"
+                        variant="ghost"
+                        part="row"
+                        disabled={!props.canFork}
+                        onClick={props.onFork}
+                      >
+                        <GitForkIcon className={THREAD_DETAILS_PANEL_ICON_CLASS} aria-hidden />
+                        <span className={THREAD_DETAILS_PANEL_LABEL_CLASS}>
+                          <T>Fork chat</T>
+                        </span>
+                      </ThreadDetailsControl>
+                    ) : null}
+                  </div>
+                </ThreadDetailsSection>
+              ) : null}
+
               {show.environment || show.openIn || show.scripts ? (
                 <ThreadDetailsSection
                   headingId="thread-details-workspace-heading"

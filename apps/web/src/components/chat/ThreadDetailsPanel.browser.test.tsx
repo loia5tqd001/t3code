@@ -7,7 +7,7 @@ import {
 } from "@t3tools/contracts";
 import { AsyncResult, Atom } from "effect/reactivity";
 import { expect, it, vi } from "vite-plus/test";
-import { page } from "vite-plus/test/browser";
+import { page, userEvent } from "vite-plus/test/browser";
 
 const SCRATCH_ROOT = "/home/user/.t3/scratch";
 
@@ -125,7 +125,17 @@ function setup(input: {
   };
 }
 
-function Panel({ fixture }: { fixture: ReturnType<typeof setup> }) {
+function Panel({
+  fixture,
+  actions = {},
+}: {
+  fixture: ReturnType<typeof setup>;
+  actions?: {
+    onOpenSideChat?: () => void;
+    onFork?: () => void;
+    canFork?: boolean;
+  };
+}) {
   const noop = () => {};
   const scriptResult = async () => ({ ok: true }) as never;
   return (
@@ -172,6 +182,7 @@ function Panel({ fixture }: { fixture: ReturnType<typeof setup> }) {
         onAddProjectScript={scriptResult}
         onUpdateProjectScript={scriptResult}
         onDeleteProjectScript={scriptResult}
+        {...actions}
         usage={{} as never}
       />
     </ChatCanvasContext>
@@ -214,4 +225,39 @@ it("offers no Initialize Git before the server config says where No project live
   await expect
     .element(page.getByRole("button", { name: "Initialize Git" }))
     .not.toBeInTheDocument();
+});
+
+it("offers side chat and fork from the thread details panel", async () => {
+  const onOpenSideChat = vi.fn();
+  const onFork = vi.fn();
+  using fixture = setup({ workspaceRoot: "/work/plain", folder: "/work/plain" });
+  await using screen = await render(
+    <Panel fixture={fixture} actions={{ onOpenSideChat, onFork, canFork: true }} />,
+  );
+  const details = screen.getByRole("region", { name: "Thread details" });
+
+  await userEvent.click(details.getByRole("button", { name: "New side chat" }));
+  await userEvent.click(details.getByRole("button", { name: "Fork chat" }));
+
+  expect(onOpenSideChat).toHaveBeenCalledOnce();
+  expect(onFork).toHaveBeenCalledOnce();
+});
+
+it("disables fork until the thread has a stable run", async () => {
+  using fixture = setup({ workspaceRoot: "/work/plain", folder: "/work/plain" });
+  await using screen = await render(<Panel fixture={fixture} actions={{ onFork: vi.fn() }} />);
+
+  await expect.element(screen.getByRole("button", { name: "Fork chat" })).toBeDisabled();
+});
+
+it("omits side chat when the thread cannot start one", async () => {
+  using fixture = setup({ workspaceRoot: "/work/plain", folder: "/work/plain" });
+  await using screen = await render(
+    <Panel fixture={fixture} actions={{ onFork: vi.fn(), canFork: true }} />,
+  );
+
+  await expect
+    .element(screen.getByRole("button", { name: "New side chat" }))
+    .not.toBeInTheDocument();
+  await expect.element(screen.getByRole("button", { name: "Fork chat" })).toBeEnabled();
 });

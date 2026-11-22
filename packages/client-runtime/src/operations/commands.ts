@@ -508,6 +508,33 @@ export const createThread = Effect.fn("EnvironmentCommands.createThread")(functi
   });
 });
 
+export const prepareThreadWorkspace = Effect.fn("EnvironmentCommands.prepareThreadWorkspace")(
+  function* (input: {
+    readonly threadId: ThreadId;
+    readonly projectId: ProjectId;
+    readonly title: string;
+    readonly modelSelection: ModelSelection;
+    readonly runtimeMode: RuntimeMode;
+    readonly interactionMode: ProviderInteractionMode;
+    readonly workspaceStrategy: import("@t3tools/contracts").OrchestrationV2ThreadLaunchWorkspaceStrategy;
+    readonly commandId?: CommandId;
+    readonly creationSource?: OrchestrationV2CreationSource;
+  }) {
+    return yield* request(ORCHESTRATION_V2_WS_METHODS.launchThread, {
+      commandId: yield* allocateCommandId(input),
+      creationSource: input.creationSource ?? "web",
+      threadId: input.threadId,
+      reuseExistingThread: true,
+      projectId: input.projectId,
+      title: input.title,
+      modelSelection: input.modelSelection,
+      runtimeMode: input.runtimeMode,
+      interactionMode: input.interactionMode,
+      workspaceStrategy: input.workspaceStrategy,
+    });
+  },
+);
+
 function simpleThreadCommand(
   type:
     | "thread.archive"

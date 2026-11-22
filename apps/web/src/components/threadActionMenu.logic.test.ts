@@ -4,6 +4,8 @@ import { buildThreadActionMenuItems, type ThreadActionMenuState } from "./thread
 
 const baseState: ThreadActionMenuState = {
   canOperate: true,
+  canFork: true,
+  latestStableRunId: "run-1",
   branch: null,
   projectFilter: null,
   isPinned: false,
@@ -78,5 +80,45 @@ describe("buildThreadActionMenuItems", () => {
   it("disables only rename where no inline title editor exists", () => {
     const items = buildThreadActionMenuItems({ ...baseState, canRename: false });
     expect(items.filter((item) => item.disabled).map((item) => item.id)).toEqual(["rename"]);
+  });
+
+  it("offers side chat and forks only when the server supports them", () => {
+    const supported = buildThreadActionMenuItems(baseState);
+    expect(supported.map((item) => item.id)).toContain("new-side-chat");
+    expect(supported.find((item) => item.id === "fork")?.children?.map((item) => item.id)).toEqual([
+      "fork-current-workspace",
+      "fork-new-worktree",
+    ]);
+
+    const unsupported = buildThreadActionMenuItems({ ...baseState, canFork: false });
+    expect(unsupported.map((item) => item.id)).not.toContain("new-side-chat");
+    expect(unsupported.map((item) => item.id)).not.toContain("fork");
+  });
+
+  it("disables a worktree fork without a branch or while the thread runs", () => {
+    const noBranch = buildThreadActionMenuItems(baseState);
+    expect(
+      noBranch
+        .find((item) => item.id === "fork")
+        ?.children?.find((item) => item.id === "fork-new-worktree")?.disabled,
+    ).toBe(true);
+
+    const withBranch = buildThreadActionMenuItems({ ...baseState, branch: "feature" });
+    expect(
+      withBranch
+        .find((item) => item.id === "fork")
+        ?.children?.find((item) => item.id === "fork-new-worktree")?.disabled,
+    ).toBe(false);
+
+    const running = buildThreadActionMenuItems({
+      ...baseState,
+      branch: "feature",
+      latestStableRunId: null,
+    });
+    expect(
+      running
+        .find((item) => item.id === "fork")
+        ?.children?.find((item) => item.id === "fork-new-worktree")?.disabled,
+    ).toBe(true);
   });
 });

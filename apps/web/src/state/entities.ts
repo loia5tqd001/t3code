@@ -360,6 +360,23 @@ export function waitForThreadShell(ref: ScopedThreadRef, timeoutMs = 5_000): Pro
   });
 }
 
+/** Waits until the shell carries a workspace different from the one inherited by a fork. */
+export function waitForThreadWorkspaceChange(
+  ref: ScopedThreadRef,
+  previousWorktreePath: string | null,
+  timeoutMs = 120_000,
+): Promise<boolean> {
+  return waitForAtomValue({
+    registry: appAtomRegistry,
+    atom: environmentThreadShells.threadShellAtom(ref),
+    predicate: (thread) => {
+      const worktreePath = thread?.worktreePath ?? null;
+      return worktreePath !== null && worktreePath !== previousWorktreePath;
+    },
+    timeoutMs,
+  });
+}
+
 export function useEnvironmentSupportsServerBrowser(environmentId: EnvironmentId | null): boolean {
   const configs = useServerConfigs();
   return (

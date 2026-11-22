@@ -12460,5 +12460,19 @@
   "b7df38b7d8792d78": "Leitfaden öffnen",
   "9e91e9a77b664e4e": "Review-Leitfaden konnte nicht gestartet werden",
   "d8aaf932f90429c4": "Diesen Befehl an den Anfang der Warteschlange verschieben ({shortcut})",
-  "425ab15036aec8a4": "Diesen Befehl an den Anfang der Warteschlange verschieben"
+  "425ab15036aec8a4": "Diesen Befehl an den Anfang der Warteschlange verschieben",
+  "b27e585acbecf3a7": "Neuer Seitenchat",
+  "35ce7c3a4495637e": "Chat forken",
+  "6914e4e380b0678d": "Chat in neuem Worktree forken",
+  "593fdae044ac8953": "Forken",
+  "9686ccce847c2a29": "Dieser Chat konnte nicht geforkt werden.",
+  "3003763276c0e534": "Dieser Chat benötigt einen Branch, bevor er in einen neuen Worktree geforkt werden kann.",
+  "fcce096cac895be5": "Der Fork wurde erstellt, aber er hat diesen Client nicht erreicht.",
+  "080b9d5c3c156aed": "Der Fork wurde erstellt, konnte aber nicht geöffnet werden.",
+  "a5e9d692cae62612": "Der Fork konnte nicht geöffnet werden.",
+  "092e0438e9ae521e": "Dieser Chat benötigt eine abgeschlossene Antwort, bevor er geforkt werden kann.",
+  "b56ae895e3ada6b3": "Der Fork wurde erstellt, aber sein neuer Worktree hat diesen Client nicht erreicht.",
+  "a169d282a060cf4d": "Thread: Neuer Seitenchat",
+  "b96e01e200efbb9c": "Thread: Forken",
+  "4523e1fe87eda93e": "Thread: In neuem Worktree forken"
 }

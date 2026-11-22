@@ -12455,5 +12455,19 @@
   "b7df38b7d8792d78": "Abrir guía",
   "9e91e9a77b664e4e": "No se pudo iniciar una guía de revisión",
   "d8aaf932f90429c4": "Mover este comando al principio de la cola ({shortcut})",
-  "425ab15036aec8a4": "Mover este comando al principio de la cola"
+  "425ab15036aec8a4": "Mover este comando al principio de la cola",
+  "b27e585acbecf3a7": "Nuevo chat lateral",
+  "35ce7c3a4495637e": "Bifurcar chat",
+  "6914e4e380b0678d": "Bifurcar chat en un nuevo worktree",
+  "593fdae044ac8953": "Bifurcar",
+  "9686ccce847c2a29": "No se pudo bifurcar este chat.",
+  "3003763276c0e534": "Este chat necesita una rama antes de poder bifurcarlo en un nuevo worktree.",
+  "fcce096cac895be5": "La bifurcación se creó, pero no llegó a este cliente.",
+  "080b9d5c3c156aed": "La bifurcación se creó, pero no se pudo abrir.",
+  "a5e9d692cae62612": "No se pudo abrir la bifurcación.",
+  "092e0438e9ae521e": "Este chat necesita una respuesta completada antes de poder bifurcarlo.",
+  "b56ae895e3ada6b3": "La bifurcación se creó, pero su nuevo worktree no llegó a este cliente.",
+  "a169d282a060cf4d": "Hilo: Nuevo chat lateral",
+  "b96e01e200efbb9c": "Hilo: Bifurcar",
+  "4523e1fe87eda93e": "Hilo: Bifurcar en nuevo worktree"
 }

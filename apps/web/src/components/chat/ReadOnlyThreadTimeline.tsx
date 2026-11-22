@@ -29,6 +29,7 @@ import { useTimelineFollow } from "./useTimelineFollow";
 const NO_ENVIRONMENT_ID = EnvironmentId.make("guest");
 const NO_TURN_DIFFS: ReadonlyArray<never> = [];
 const NO_OPTIMISTIC_MESSAGES: ReadonlyArray<never> = [];
+const NO_FORK_RUNS: ReadonlyArray<never> = [];
 const ignore = () => {};
 
 /**
@@ -104,6 +105,7 @@ export function ReadOnlyThreadTimeline(props: {
             runningRunId={runningRunId}
             turnDiffSummaries={NO_TURN_DIFFS}
             runs={projection.runs}
+            forkRuns={NO_FORK_RUNS}
             routeThreadKey={threadKey}
             onOpenThread={ignore}
             supportsConversationRollback={false}

@@ -170,6 +170,7 @@ import {
 import { type LegendListRef } from "@legendapp/list/react";
 import { useWorkspaceRevision } from "../hooks/useWorkspaceRevision";
 import { DEFAULT_INTERACTION_MODE, type ChatMessage } from "../types";
+import type { RunId } from "@t3tools/contracts";
 import { buildThreadRouteParams } from "../threadRoutes";
 import { useTheme } from "../hooks/useTheme";
 import { copyThreadReference } from "../lib/copyThreadReference";
@@ -314,7 +315,7 @@ import { resolveScrollToEndClearance } from "./composerFooterLayout";
 import { ChatHeader } from "./chat/ChatHeader";
 import { useSideChat } from "./chat/useSideChat";
 import { useForkThread } from "./chat/useForkThread";
-import { forkableRunId } from "../lib/forkThread";
+import { forkRunBeforeRequest, forkableRunId, normalizeForkRuns } from "../lib/forkThread";
 import { sideThreadComposer, sideThreadKindOf } from "@t3tools/client-runtime/side-thread";
 import { useOpenSurfaceInMainView } from "../hooks/useOpenSurfaceInMainView";
 import { useRemoteOpenState } from "~/remoteOpen";
@@ -2992,7 +2993,7 @@ export default function ChatView(props: ChatViewProps) {
                 ? gt("Available once the thread's worktree is set up.")
                 : null;
   const openSideChatStable = useStableCallback(() => void sideChat.open());
-  const { forkSameWorkspace, forkInNewWorktree } = useForkThread({
+  const { forkSameWorkspace, forkInNewWorktree, forkRequest } = useForkThread({
     onError: (message) => {
       if (activeThread) setThreadError(activeThread.id, message);
     },
@@ -3018,6 +3019,22 @@ export default function ChatView(props: ChatViewProps) {
       interactionMode: activeThread.interactionMode,
     });
   });
+  const onForkFromRequestStable = useStableCallback(
+    async (input: { readonly requestRunId: RunId; readonly prompt: string }) => {
+      if (!activeThread || activeThreadRef === null || serverProjection === null) return;
+      const runId = forkRunBeforeRequest(
+        normalizeForkRuns(serverProjection.runs),
+        input.requestRunId,
+      );
+      if (runId === null) return;
+      await forkRequest({
+        threadRef: activeThreadRef,
+        runId,
+        title: `${activeThread.title} fork`,
+        prompt: input.prompt,
+      });
+    },
+  );
   const openSurfaceInMainView = useOpenSurfaceInMainView(activeThreadRef);
   const sendSideChatStable = useStableCallback(sideChat.open);
   const { onConfirmRevertStable, onForkFromRunStable, onRevertTimelineTurnStable } =
@@ -3662,6 +3679,7 @@ export default function ChatView(props: ChatViewProps) {
                   footer={timelineFooter}
                   listRef={legendListRef}
                   runs={serverProjection?.runs ?? []}
+                  forkRuns={serverProjection?.runs ?? []}
                   latestRun={activeActivityRun}
                   announcedRun={announcedRun(activeActivityRun, serverProjection?.runs ?? [])}
                   detailBehindShell={isDetailBehindShell(
@@ -3680,7 +3698,11 @@ export default function ChatView(props: ChatViewProps) {
                   // Side chat runs keep no checkpoints to diff, and a fork would promote the side chat.
                   {...(embedded
                     ? {}
-                    : { onOpenTurnDiff: onOpenTurnDiffStable, onForkFromRun: onForkFromRunStable })}
+                    : {
+                        onOpenTurnDiff: onOpenTurnDiffStable,
+                        onForkFromRun: onForkFromRunStable,
+                        onForkFromRequest: onForkFromRequestStable,
+                      })}
                   onOpenThread={onOpenRelatedThreadStable}
                   parentThreadLink={parentThreadLink}
                   workflowOpening={workflowOpening}

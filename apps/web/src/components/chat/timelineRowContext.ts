@@ -31,6 +31,7 @@ import { type MessagesTimelineRow, type WorkGroupScrollAnchor } from "./Messages
 import { type TimestampFormat } from "@t3tools/contracts/settings";
 import type { TurnItemDetailSource } from "../../state/queries";
 import { type HandoffTimelineRun } from "./V2LifecycleRow";
+import type { ForkRunSummary } from "~/lib/forkThread";
 
 /**
  * Where an expanded row reads an item's detail and a command's output. The owner's rows read them
@@ -64,6 +65,8 @@ export interface TimelineRowSharedState {
   workspaceRoot: string | undefined;
   skills: ReadonlyArray<ServerProviderSkill>;
   runs: ReadonlyArray<HandoffTimelineRun>;
+  /** Full run records for request forks; `runs` omits status to keep streamed updates cheap. */
+  forkRuns: ReadonlyArray<ForkRunSummary>;
   activeThreadEnvironmentId: EnvironmentId;
   onRevertToTurnCount: (targetTurnCount: number, messageId: MessageId) => void;
   onUseArtifactTemplate: (template: CodexArtifactTemplate) => void;
@@ -93,6 +96,10 @@ export interface TimelineRowSharedState {
   /** Absent hides "Fork from this response", as in the guest view. */
   onForkFromRun:
     | ((input: { readonly sourceThreadId: ThreadId; readonly runId: RunId }) => Promise<void>)
+    | undefined;
+  /** Unset hides "Fork and edit this request", as in the guest view. */
+  onForkFromRequest:
+    | ((input: { readonly requestRunId: RunId; readonly prompt: string }) => Promise<void>)
     | undefined;
   onToggleTurnFold: (runId: RunId) => void;
   onToggleAttemptFold: (attemptId: RunAttemptId) => void;

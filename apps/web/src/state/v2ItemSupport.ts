@@ -11,6 +11,8 @@ import { Atom } from "effect/reactivity";
 
 import { environmentThreadDetails } from "./threads";
 
+const EMPTY_ITEM_SUPPORT_ATOM = Atom.make(EMPTY_V2_ITEM_SUPPORT);
+
 function supportKey(input: {
   readonly environmentId: EnvironmentId;
   readonly threadId: ThreadId;
@@ -46,17 +48,19 @@ const itemSupportAtomFamily = Atom.family((key: string) => {
 });
 
 export function useV2ItemSupport(input: {
-  readonly environmentId: EnvironmentId;
-  readonly sourceThreadId: ThreadId;
-  readonly sourceItemId: TurnItemId;
+  readonly environmentId: EnvironmentId | null;
+  readonly sourceThreadId: ThreadId | null;
+  readonly sourceItemId: TurnItemId | null;
 }): V2ItemSupport {
+  const targetKey =
+    input.environmentId === null || input.sourceThreadId === null || input.sourceItemId === null
+      ? null
+      : supportKey({
+          environmentId: input.environmentId,
+          threadId: input.sourceThreadId,
+          itemId: input.sourceItemId,
+        });
   return useAtomValue(
-    itemSupportAtomFamily(
-      supportKey({
-        environmentId: input.environmentId,
-        threadId: input.sourceThreadId,
-        itemId: input.sourceItemId,
-      }),
-    ),
+    targetKey === null ? EMPTY_ITEM_SUPPORT_ATOM : itemSupportAtomFamily(targetKey),
   );
 }

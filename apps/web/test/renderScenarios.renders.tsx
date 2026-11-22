@@ -94,6 +94,7 @@ function timelineFor() {
     latestRun: null,
     turnDiffSummaries: [],
     runs: [],
+    forkRuns: [],
     onOpenTurnDiff: () => {},
     onOpenThread: () => {},
     onForkFromRun: async () => {},

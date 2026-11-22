@@ -110,10 +110,12 @@ function baseProps(): Omit<TimelineProps, "timelineEntries"> {
     latestRun: null,
     turnDiffSummaries: [],
     runs: [],
+    forkRuns: [],
     routeThreadKey: `environment-local:thread-${Math.random().toString(36).slice(2)}`,
     onOpenTurnDiff: () => {},
     onOpenThread: () => {},
     onForkFromRun: async () => {},
+    onForkFromRequest: async () => {},
     supportsConversationRollback: false,
     onRevertToTurnCount: () => {},
     isRevertingCheckpoint: false,
@@ -137,7 +139,7 @@ function message(
   text: string,
   overrides: Partial<Extract<Entry, { kind: "message" }>["message"]> = {},
   id = "message-1",
-): Entry {
+): Extract<Entry, { kind: "message" }> {
   return {
     id: `entry-${id}`,
     kind: "message",
@@ -1377,6 +1379,49 @@ describe("MessagesTimeline citations", () => {
     );
     await expect.element(screen.getByText("the cited answer")).toBeVisible();
     expect(toast).not.toHaveBeenCalled();
+  });
+});
+
+describe("MessagesTimeline user request actions", () => {
+  it("forks an earlier request with its prompt", async () => {
+    setup();
+    const onForkFromRequest = vi.fn(async () => {});
+    const requestRunId = RunId.make("run-request");
+    await using screen = await renderTimeline(
+      [
+        message("First request", { runId: RunId.make("run-first"), inputIntent: "turn_start" }),
+        message("Done", { role: "assistant", runId: RunId.make("run-first") }, "assistant-1"),
+        {
+          ...message(
+            "Amend this request",
+            {
+              runId: requestRunId,
+              inputIntent: "turn_start",
+            },
+            "user-2",
+          ),
+          projectedItem: v2Item("user_message", {
+            id: "user-2",
+            runId: requestRunId,
+            text: "Amend this request",
+            inputIntent: "turn_start",
+          }),
+        },
+      ],
+      {
+        forkRuns: [
+          { runId: RunId.make("run-first"), status: "completed", ordinal: 1 },
+          { runId: requestRunId, status: "running", ordinal: 2 },
+        ],
+        onForkFromRequest,
+      },
+    );
+
+    await click(screen.button("Fork and edit this request"));
+    expect(onForkFromRequest).toHaveBeenCalledWith({
+      requestRunId,
+      prompt: "Amend this request",
+    });
   });
 });
 

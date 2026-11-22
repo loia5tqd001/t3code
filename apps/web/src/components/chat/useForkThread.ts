@@ -6,8 +6,8 @@ import type {
   ProviderInteractionMode,
   RunId,
   RuntimeMode,
-  ScopedThreadRef,
   ScopedProjectRef,
+  ScopedThreadRef,
 } from "@t3tools/contracts";
 import { useRouter } from "@tanstack/react-router";
 import { msg } from "gt-react";
@@ -24,6 +24,7 @@ import { threadEnvironment } from "~/state/threads";
 import { useAtomCommand } from "~/state/use-atom-command";
 import { useOrchestrationCommand } from "~/state/use-orchestration-command";
 import { stackedThreadToast, toastManager } from "~/components/ui/toast";
+import { useComposerDraftStore } from "~/composerDraftStore";
 
 export function useForkThread(input: { readonly onError?: (message: string) => void }) {
   const { onError } = input;
@@ -64,6 +65,34 @@ export function useForkThread(input: { readonly onError?: (message: string) => v
     }
     return targetRef;
   };
+  const forkFromRunIdIntoComposer = async (input: {
+    readonly threadRef: ScopedThreadRef;
+    readonly runId: RunId;
+    readonly title: string;
+    readonly prompt: string;
+  }) => {
+    const targetThreadId = newThreadId();
+    const targetRef = scopeThreadRef(input.threadRef.environmentId, targetThreadId);
+    const result = await forkFromRun({
+      environmentId: input.threadRef.environmentId,
+      input: {
+        sourceThreadId: input.threadRef.threadId,
+        targetThreadId,
+        runId: input.runId,
+        title: input.title,
+      },
+    });
+    if (result._tag === "Failure") {
+      reportFailure(m(msg("Could not fork this request.")), squashAtomCommandFailure(result));
+      return null;
+    }
+    if (!(await waitForThreadShell(targetRef))) {
+      onError?.(m(msg("The fork was created, but it did not reach this client.")));
+      return null;
+    }
+    useComposerDraftStore.getState().setPrompt(targetRef, input.prompt);
+    return targetRef;
+  };
   const openThread = async (threadRef: ScopedThreadRef) => {
     const navigation = await settlePromise(() =>
       router.navigate({
@@ -95,6 +124,16 @@ export function useForkThread(input: { readonly onError?: (message: string) => v
       return false;
     }
     const targetRef = await forkFromRunId({ ...input, runId: input.runId });
+    if (targetRef === null) return false;
+    return openThread(targetRef);
+  };
+  const forkRequest = async (input: {
+    readonly threadRef: ScopedThreadRef;
+    readonly runId: RunId;
+    readonly title: string;
+    readonly prompt: string;
+  }) => {
+    const targetRef = await forkFromRunIdIntoComposer(input);
     if (targetRef === null) return false;
     return openThread(targetRef);
   };
@@ -159,5 +198,5 @@ export function useForkThread(input: { readonly onError?: (message: string) => v
     }
     return openThread(target);
   };
-  return { forkSameWorkspace, forkInNewWorktree };
+  return { forkSameWorkspace, forkInNewWorktree, forkRequest };
 }

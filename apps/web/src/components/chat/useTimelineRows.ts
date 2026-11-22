@@ -1,5 +1,6 @@
 import { useLocale, useMessages } from "gt-react";
 import { useState } from "react";
+import { normalizeForkRuns, type ForkRunSource, type ForkRunSummary } from "~/lib/forkThread";
 import {
   computeStableMessagesTimelineRows,
   handoffRunsSignature,
@@ -12,6 +13,7 @@ import {
 import { type HandoffTimelineRun } from "./V2LifecycleRow";
 
 const EMPTY_TIMELINE_RUNS: ReadonlyArray<HandoffTimelineRun> = [];
+const EMPTY_FORK_RUNS: ReadonlyArray<ForkRunSummary> = [];
 
 export function useStableHandoffRuns(
   runs: ReadonlyArray<HandoffTimelineRun>,
@@ -32,6 +34,26 @@ export function useStableHandoffRuns(
           providerInstanceId: run.providerInstanceId,
           modelSelection: run.modelSelection,
         }));
+  setState({ source: runs, signature, value });
+  return value;
+}
+
+function forkRunsSignature(runs: ReadonlyArray<ForkRunSummary>): string {
+  return runs.map((run) => `${run.runId}\0${run.status}\0${run.ordinal}`).join("\n");
+}
+
+export function useStableForkRuns(
+  runs: ReadonlyArray<ForkRunSource>,
+): ReadonlyArray<ForkRunSummary> {
+  const [state, setState] = useState<{
+    readonly source: ReadonlyArray<ForkRunSource> | null;
+    readonly signature: string;
+    readonly value: ReadonlyArray<ForkRunSummary>;
+  }>({ source: null, signature: "", value: EMPTY_FORK_RUNS });
+  if (state.source === runs) return state.value;
+  const normalized = normalizeForkRuns(runs);
+  const signature = forkRunsSignature(normalized);
+  const value = signature === state.signature ? state.value : normalized;
   setState({ source: runs, signature, value });
   return value;
 }

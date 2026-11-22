@@ -40,6 +40,7 @@ import {
   DownloadIcon,
   EyeIcon,
   type LucideIcon,
+  SplitIcon,
   MessagesSquareIcon,
   Redo2Icon,
   PencilIcon,
@@ -98,6 +99,8 @@ import {
   resolvePreviewAnnotationImage,
   userMessageFileLabel,
 } from "./TimelineUserMessageRow.logic";
+import { forkRunBeforeRequest } from "~/lib/forkThread";
+import { useV2ItemSupport } from "../../state/v2ItemSupport";
 
 // Drawn inside the media so dark screenshots keep an edge on the dark background.
 const MEDIA_EDGE_CLASS_NAME =
@@ -876,6 +879,7 @@ function UserTimelineRow({ row }: { row: Extract<TimelineRow, { kind: "message" 
         </TooltipPopup>
       </Tooltip>
       <div className={cn("flex items-center gap-0.5", floatActions && "flex-wrap justify-end")}>
+        <ForkRequestButton row={row} />
         {typeof revertTurnCount === "number" && (
           <RevertUserMessageButton turnCount={revertTurnCount} messageId={row.message.id} />
         )}
@@ -1172,6 +1176,66 @@ function UserMessageIntentMarker({
           : intent === "promoted_queued_to_steer"
             ? gt("Originally queued, then promoted to steer the active turn")
             : gt("Steered the active turn")}
+      </TooltipPopup>
+    </Tooltip>
+  );
+}
+
+function ForkRequestButton({ row }: { row: Extract<TimelineRow, { kind: "message" }> }) {
+  const ctx = use(TimelineRowCtx);
+  const gt = useGT();
+  const message = row.message;
+  const presentation = resolveUserMessagePresentation(message);
+  const projectedItem = row.projectedItem;
+  const support = useV2ItemSupport({
+    environmentId: ctx.activeThreadEnvironmentId,
+    sourceThreadId: projectedItem?.sourceThreadId ?? null,
+    sourceItemId: projectedItem?.sourceItemId ?? null,
+  });
+  const capabilities = support.providerSession?.capabilities;
+  const forkBoundary =
+    message.runId === null ? null : forkRunBeforeRequest(ctx.forkRuns, message.runId);
+  const canFork =
+    ctx.onForkFromRequest !== undefined &&
+    projectedItem?.visibility === "local" &&
+    projectedItem.item.type === "user_message" &&
+    projectedItem.item.status === "completed" &&
+    message.role === "user" &&
+    presentation.attribution === null &&
+    message.senderThreadId === undefined &&
+    message.linkedSender === undefined &&
+    message.inputIntent === "turn_start" &&
+    !message.streaming &&
+    forkBoundary !== null &&
+    (capabilities === undefined ||
+      (capabilities.threads.canForkThread &&
+        capabilities.threads.canForkFromTurn &&
+        capabilities.identity.nativeThreadIds === "strong") ||
+      capabilities.context.supportsFullThreadHandoff);
+  if (!canFork) return null;
+
+  return (
+    <Tooltip>
+      <TooltipTrigger
+        render={
+          <Button
+            type="button"
+            size="xs"
+            variant="ghost"
+            onClick={() => {
+              void ctx.onForkFromRequest!({
+                requestRunId: message.runId!,
+                prompt: presentation.text,
+              });
+            }}
+            aria-label={gt("Fork and edit this request")}
+          />
+        }
+      >
+        <SplitIcon className="size-3" />
+      </TooltipTrigger>
+      <TooltipPopup side="top">
+        <T>Fork and edit this request</T>
       </TooltipPopup>
     </Tooltip>
   );

@@ -2466,6 +2466,7 @@ export function makeClaudeQueryOptions(input: {
         buildRuntimeInstructions({
           harness: "Claude Code",
           runtimePolicy: { cwd: input.cwd, workspace: input.workspace },
+          pullRequestLinking: input.mcpServers !== undefined,
         }) +
           (input.mcpServers === undefined
             ? ""

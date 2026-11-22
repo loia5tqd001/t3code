@@ -2162,139 +2162,165 @@ const previewControlsToolNames = Object.keys(PreviewControlsToolkit.tools).sort(
 const deviceToolNames = Object.keys(DeviceToolkit.tools).sort();
 const capabilityToolNames = capabilityTools.map((tool) => tool.name).sort();
 const CapabilityToolkit = Toolkit.make(...capabilityTools);
+const capabilityThreadId = ThreadId.make("capability-thread");
+const capabilityScope = (
+  token: string,
+  capabilities: ReadonlyArray<McpInvocationContext.McpCapability>,
+): McpInvocationContext.McpThreadInvocationScope => ({
+  environmentId,
+  requestNamespace: token,
+  thread: {
+    threadId: capabilityThreadId,
+    providerSessionId: token,
+    providerInstanceId: ProviderInstanceId.make("copilot"),
+  },
+  client: undefined,
+  capabilities: new Set(capabilities),
+  issuedAt: 1,
+});
+const capabilityScopes = (
+  token: string,
+  capabilities: ReadonlyArray<McpInvocationContext.McpCapability>,
+) =>
+  new Map([
+    [`${token}Normal`, capabilityScope(`${token}Normal`, capabilities)],
+    [`${token}Deferred`, capabilityScope(`${token}Deferred`, capabilities)],
+  ]);
 
-const capabilityServerLayer = McpHttpServer.layerMcpTransport(
-  Layer.mergeAll(
-    McpHttpServer.toolkitRegistration(
-      CapabilityToolkit,
-      McpToolAccess.toLayer(CapabilityToolkit, {
-        ...Object.fromEntries(
-          capabilityToolNames.map((name) => [
-            name,
-            McpToolAccess.reads(() => Effect.succeed({})),
-          ]),
+const capabilityServer = (scopes: ReadonlyMap<string, McpInvocationContext.McpInvocationScope>) =>
+  McpHttpServer.layerMcpTransport(
+    Layer.mergeAll(
+      McpHttpServer.toolkitRegistration(
+        CapabilityToolkit,
+        McpToolAccess.toLayer(
+          CapabilityToolkit,
+          Object.fromEntries(
+            capabilityToolNames.map((name) => [
+              name,
+              McpToolAccess.reads(() => Effect.succeed({})),
+            ]),
+          ),
         ),
+      ),
+      McpHttpServer.layerToolSearch,
+    ),
+  ).pipe(
+    Layer.provide(ServerSettings.layerTest()),
+    Layer.provide(McpToolAccessTestkit.liveThreadsLayer),
+    Layer.provide(
+      Layer.mock(McpSessionRegistry.McpSessionRegistry)({
+        resolve: (token) => Effect.succeed(scopes.get(token)),
       }),
     ),
-    McpHttpServer.layerToolSearch,
-  ),
-).pipe(
-  Layer.provide(ServerSettings.layerTest()),
-  Layer.provide(McpToolAccessTestkit.liveThreadsLayer),
-  Layer.provide(
-    Layer.mock(McpSessionRegistry.McpSessionRegistry)({
-      resolve: (token) =>
-        Effect.succeed({
-          environmentId,
-          requestNamespace: token,
-          thread: {
-            threadId: ThreadId.make(`thread-${token}`),
-            providerSessionId: token,
-            providerInstanceId: ProviderInstanceId.make("copilot"),
-          },
-          client: undefined,
-          capabilities: new Set(
-            token === "allCapabilities" ? (["preview", "device"] as const) : [],
-          ),
-          issuedAt: 1,
-        }),
-    }),
-  ),
-);
+  );
 
 it.effect.each([
-  ["hides preview and device tools without their capabilities", "noCapabilities", [], 0],
-  [
-    "lists preview and device tools with their capabilities",
-    "allCapabilities",
-    capabilityToolNames,
-    capabilityToolNames.length,
-  ],
-] as const)("%s", ([, token, expected, count]) =>
+  ["hides preview and device tools without their capabilities", false],
+  ["lists preview and device tools with their capabilities", true],
+] as const)("%s", ([, enabled]) =>
   Effect.scoped(
     Effect.gen(function* () {
-      yield* HttpRouter.serve(capabilityServerLayer, {
-        disableListenLog: true,
-        disableLogger: true,
-      }).pipe(Layer.build);
+      const token = enabled ? "allCapabilities" : "noCapabilities";
+      const normalToken = `${token}Normal`;
+      const deferredToken = `${token}Deferred`;
+      yield* HttpRouter.serve(
+        capabilityServer(capabilityScopes(token, enabled ? ["preview", "device"] : [])),
+        {
+          disableListenLog: true,
+          disableLogger: true,
+        },
+      ).pipe(Layer.build);
       const httpClient = yield* HttpClient.HttpClient;
-      const headers = {
-        accept: "application/json, text/event-stream",
-        authorization: `Bearer ${token}`,
-        "t3-tool-exposure": "deferred",
-      };
-      const initialize = yield* httpClient.post("/mcp", {
-        headers,
-        body: HttpBody.text(
-          `{"jsonrpc":"2.0","id":1,"method":"initialize","params":{"protocolVersion":"2025-06-18","capabilities":{},"clientInfo":{"name":"probe","version":"1.0.0"}}}`,
-          "application/json",
-        ),
-      });
-      const rpc = (method: string, params: object) =>
-        httpClient
-          .post("/mcp", {
-            headers: {
-              ...headers,
-              "mcp-session-id": initialize.headers["mcp-session-id"]!,
-              "mcp-protocol-version": "2025-06-18",
-            },
+      const session = (token: string, deferred: boolean) =>
+        Effect.gen(function* () {
+          const headers = {
+            accept: "application/json, text/event-stream",
+            authorization: `Bearer ${token}`,
+            ...(deferred ? { "t3-tool-exposure": "deferred" } : {}),
+          };
+          const initialize = yield* httpClient.post("/mcp", {
+            headers,
             body: HttpBody.text(
-              JSON.stringify({ jsonrpc: "2.0", id: 2, method, params }),
+              `{"jsonrpc":"2.0","id":1,"method":"initialize","params":{"protocolVersion":"2025-06-18","capabilities":{},"clientInfo":{"name":"probe","version":"1.0.0"}}}`,
               "application/json",
             ),
-          })
-          .pipe(
-            Effect.flatMap((response) => response.text),
-            Effect.map((text): unknown =>
-              text
-                .split("\n")
-                .filter((line) => line.startsWith("data: ") || line.startsWith("{"))
-                .map((line) => JSON.parse(line.replace(/^data: /u, "")) as { id?: number })
-                .find((message) => message.id === 2),
+          });
+          const rpc = (method: string, params: object) =>
+            httpClient
+              .post("/mcp", {
+                headers: {
+                  ...headers,
+                  "mcp-session-id": initialize.headers["mcp-session-id"]!,
+                  "mcp-protocol-version": "2025-06-18",
+                },
+                body: HttpBody.text(
+                  JSON.stringify({ jsonrpc: "2.0", id: 2, method, params }),
+                  "application/json",
+                ),
+              })
+              .pipe(
+                Effect.flatMap((response) => response.text),
+                Effect.map((text): unknown =>
+                  text
+                    .split("\n")
+                    .filter((line) => line.startsWith("data: ") || line.startsWith("{"))
+                    .map((line) => JSON.parse(line.replace(/^data: /u, "")) as { id?: number })
+                    .find((message) => message.id === 2),
+                ),
+              );
+          return {
+            listed: rpc("tools/list", {}).pipe(
+              Effect.map((body) =>
+                (body as { result: { tools: ReadonlyArray<{ name: string }> } }).result.tools
+                  .map((tool) => tool.name)
+                  .filter((name) => capabilityToolNames.includes(name))
+                  .sort(),
+              ),
             ),
-          );
-      const listed = yield* rpc("tools/list", {}).pipe(
-        Effect.map((body) =>
-          (body as { result: { tools: ReadonlyArray<{ name: string }> } }).result.tools
-            .map((tool) => tool.name)
-            .filter((name) => capabilityToolNames.includes(name))
-            .sort(),
-        ),
-      );
-      const searched = yield* Effect.forEach(capabilityToolNames, (name) =>
-        rpc("tools/call", { name: "tool_search", arguments: { query: name } }).pipe(
-          Effect.map(
-            (body) =>
-              (
-                body as {
-                  result: {
-                    structuredContent: { tools: ReadonlyArray<{ name: string }> };
-                  };
-                }
-              ).result.structuredContent.tools,
-          ),
-          Effect.flatMap((tools) =>
-            tools.some((tool) => tool.name === name)
-              ? Effect.succeed(name)
-              : Effect.succeed(undefined),
-          ),
-        ),
-      ).pipe(Effect.map((names) => names.filter((name) => name !== undefined)));
-      expect(listed).toHaveLength(count);
-      expect(listed).toEqual(expected);
-      expect(searched).toHaveLength(count);
-      expect(searched.sort()).toEqual(expected);
+            call: (name: string, args: object) =>
+              rpc("tools/call", { name, arguments: args }).pipe(
+                Effect.map(
+                  (body) =>
+                    (
+                      body as {
+                        result: {
+                          structuredContent: { tools: ReadonlyArray<{ name: string }> };
+                        };
+                      }
+                    ).result.structuredContent,
+                ),
+              ),
+          };
+        });
+
+      const normal = yield* session(normalToken, false);
+      const deferred = yield* session(deferredToken, true);
+      const listed = yield* normal.listed;
+      const searched = enabled
+        ? yield* Effect.forEach(capabilityToolNames, (name) =>
+            deferred
+              .call("tool_search", { query: name })
+              .pipe(
+                Effect.map(({ tools }) => (tools.some((tool) => tool.name === name) ? name : null)),
+              ),
+          ).pipe(Effect.map((names) => names.filter((name) => name !== null)))
+        : [];
+      const loaded = yield* deferred.listed;
+      expect(listed).toHaveLength(enabled ? capabilityToolNames.length : 0);
+      expect(listed).toEqual(enabled ? capabilityToolNames : []);
+      expect(searched).toEqual(enabled ? capabilityToolNames : []);
+      expect(loaded).toEqual(enabled ? capabilityToolNames : []);
       expect(previewToolNames).toHaveLength(12);
       expect(previewControlsToolNames).toHaveLength(2);
       expect(deviceToolNames).toHaveLength(4);
-      expect(listed.filter((name) => previewToolNames.includes(name))).toHaveLength(
-        count === 0 ? 0 : previewToolNames.length,
+      expect(loaded.filter((name) => previewToolNames.includes(name))).toHaveLength(
+        enabled ? previewToolNames.length : 0,
       );
-      expect(listed.filter((name) => previewControlsToolNames.includes(name))).toHaveLength(
-        count === 0 ? 0 : previewControlsToolNames.length,
+      expect(loaded.filter((name) => previewControlsToolNames.includes(name))).toHaveLength(
+        enabled ? previewControlsToolNames.length : 0,
       );
-      expect(listed.filter((name) => deviceToolNames.includes(name))).toHaveLength(
-        count === 0 ? 0 : deviceToolNames.length,
+      expect(loaded.filter((name) => deviceToolNames.includes(name))).toHaveLength(
+        enabled ? deviceToolNames.length : 0,
       );
     }),
   ).pipe(Effect.provide(NodeHttpServer.layerTest)),

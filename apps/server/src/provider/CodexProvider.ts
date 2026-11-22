@@ -487,8 +487,11 @@ function parseCodexSkillsListResponse(
   const skills = matchingEntry
     ? matchingEntry.skills
     : response.data.flatMap((entry) => entry.skills);
+  const seenNames = new Set<string>();
 
-  return skills.map((skill) => {
+  return skills.flatMap((skill) => {
+    if (seenNames.has(skill.name)) return [];
+    seenNames.add(skill.name);
     const shortDescription =
       skill.shortDescription ?? skill.interface?.shortDescription ?? undefined;
 
@@ -511,7 +514,7 @@ function parseCodexSkillsListResponse(
       parsedSkill.shortDescription = shortDescription;
     }
 
-    return parsedSkill;
+    return [parsedSkill];
   });
 }
 

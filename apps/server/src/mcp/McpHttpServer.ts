@@ -1429,13 +1429,24 @@ export const layerTools = Layer.mergeAll(
   layerMessageToolkit,
 );
 
+const defaultMcpClientProfile = {
+  protocolVersion: mcpProtocols[0].protocolVersion,
+  capabilities: {},
+  clientInfo: undefined,
+};
+
 const layerToolExposure = Layer.effect(
   McpToolExposure.McpToolExposure,
   Effect.gen(function* () {
     const server = yield* McpServer.McpServer;
     return McpToolExposure.make(
       () =>
-        server.tools.map(({ tool }) => ({ name: tool.name, description: tool.description ?? "" })),
+        server.tools.flatMap(({ tool, annotations }) => {
+          const enabledWhen = Context.getOrUndefined(annotations, McpSchema.EnabledWhen);
+          return enabledWhen !== undefined && !enabledWhen(defaultMcpClientProfile)
+            ? []
+            : [{ name: tool.name, description: tool.description ?? "" }];
+        }),
       () => server.notifications["notifications/tools/list_changed"]({}),
     );
   }),

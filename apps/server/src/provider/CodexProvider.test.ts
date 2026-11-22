@@ -19,7 +19,7 @@ import {
   mapCodexModelCapabilities,
 } from "./CodexProvider.ts";
 
-function makeFakeCodexAppServers() {
+function makeFakeCodexAppServers(skillsForCwd?: (cwd: string) => ReadonlyArray<unknown>) {
   const helpers: Array<{
     readonly codexHome: unknown;
     readonly crash: Effect.Effect<void>;
@@ -75,7 +75,7 @@ function makeFakeCodexAppServers() {
                 data: (frame.params?.cwds ?? []).map((cwd) => ({
                   cwd,
                   errors: [],
-                  skills: [
+                  skills: skillsForCwd?.(cwd) ?? [
                     {
                       name: `skill-in-${cwd}`,
                       path: `${cwd}/SKILL.md`,
@@ -100,6 +100,61 @@ function makeFakeCodexAppServers() {
   );
   return { helpers, spawner };
 }
+
+it.effect("deduplicates Codex skills by name with the first occurrence winning", () =>
+  Effect.gen(function* () {
+    const { spawner } = makeFakeCodexAppServers(() => [
+      {
+        name: "first",
+        path: "/first/SKILL.md",
+        enabled: true,
+        description: "First",
+        scope: "user",
+      },
+      {
+        name: "second",
+        path: "/second/SKILL.md",
+        enabled: false,
+        description: "Second",
+        scope: "repo",
+      },
+      {
+        name: "first",
+        path: "/duplicate/SKILL.md",
+        enabled: false,
+        description: "Duplicate",
+        scope: "repo",
+      },
+    ]);
+    const probe = yield* makeCodexSkillsProbe().pipe(
+      Effect.provideService(ChildProcessSpawner.ChildProcessSpawner, spawner),
+    );
+
+    const skills = yield* probe({
+      binaryPath: "codex",
+      homePath: "/home",
+      cwd: "/workspace",
+      environment: {},
+    });
+
+    assert.deepStrictEqual(skills, [
+      {
+        name: "first",
+        path: "/first/SKILL.md",
+        enabled: true,
+        description: "First",
+        scope: "user",
+      },
+      {
+        name: "second",
+        path: "/second/SKILL.md",
+        enabled: false,
+        description: "Second",
+        scope: "repo",
+      },
+    ]);
+  }).pipe(Effect.provideService(HostProcess.Platform, "linux")),
+);
 
 it.effect("reuses one Codex skills helper per launch until it idles out", () =>
   Effect.gen(function* () {

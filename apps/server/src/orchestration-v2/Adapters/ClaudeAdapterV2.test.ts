@@ -973,6 +973,11 @@ describe("ClaudeAdapterV2 device instructions", () => {
     );
   });
 
+  it("includes pull request linking instructions only when T3 MCP servers are configured", () => {
+    assert.notInclude(append({ mcp: false, deviceToolsAvailable: false }), "link_pull_request");
+    assert.include(append({ mcp: true, deviceToolsAvailable: false }), "link_pull_request");
+  });
+
   it("gives native subagents the device block only in a session with device access", async () => {
     // Subagents start from their task prompt, not the parent's system prompt.
     const subagentContext = (input: {

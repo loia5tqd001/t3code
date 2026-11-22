@@ -213,6 +213,20 @@ export const hiddenWithoutBackgroundWait = (): boolean => {
   );
 };
 
+/** `hiddenFromOutsideClients`, and hidden from a thread without preview automation. */
+export const hiddenWithoutPreview = (): boolean => {
+  const fiber = Fiber.getCurrent();
+  const scope = fiber && Context.getOrUndefined(fiber.context, McpInvocationContext);
+  return scope === undefined || (scope.thread !== undefined && scope.capabilities.has("preview"));
+};
+
+/** `hiddenFromOutsideClients`, and hidden from a thread without device access. */
+export const hiddenWithoutDevice = (): boolean => {
+  const fiber = Fiber.getCurrent();
+  const scope = fiber && Context.getOrUndefined(fiber.context, McpInvocationContext);
+  return scope === undefined || (scope.thread !== undefined && scope.capabilities.has("device"));
+};
+
 /** `McpSchema.EnabledWhen` for tools that only serve links, hidden while the beta is off. */
 export const hiddenWhileLinksOff = (): boolean => {
   const fiber = Fiber.getCurrent();

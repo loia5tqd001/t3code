@@ -1500,6 +1500,8 @@ export const OrchestrationV2ConversationMessage = Schema.Struct({
   context: Schema.optional(OrchestrationMessageContext),
   attachments: Schema.Array(ChatAttachment),
   streaming: Schema.Boolean,
+  /** When the user saved this message for later. Absent means not saved. */
+  savedAt: Schema.optional(Schema.NullOr(Schema.DateTimeUtc)),
   createdAt: Schema.DateTimeUtc,
   updatedAt: Schema.DateTimeUtc,
   delegatedCompletion: Schema.optional(
@@ -1511,6 +1513,39 @@ export const OrchestrationV2ConversationMessage = Schema.Struct({
   ),
 });
 export type OrchestrationV2ConversationMessage = typeof OrchestrationV2ConversationMessage.Type;
+
+export const OrchestrationV2SavedMessage = Schema.Struct({
+  messageId: MessageId,
+  threadId: ThreadId,
+  projectId: ProjectId,
+  threadTitle: TrimmedNonEmptyString,
+  role: Schema.Literals(["user", "assistant"]),
+  text: Schema.String,
+  textLength: NonNegativeInt,
+  savedAt: Schema.DateTimeUtc,
+  messageCreatedAt: Schema.DateTimeUtc,
+});
+export type OrchestrationV2SavedMessage = typeof OrchestrationV2SavedMessage.Type;
+
+export const OrchestrationV2SavedMessageJson = OrchestrationV2SavedMessage.mapFields((fields) => ({
+  ...fields,
+  savedAt: Schema.DateTimeUtcFromString,
+  messageCreatedAt: Schema.DateTimeUtcFromString,
+}));
+export type OrchestrationV2SavedMessageJson = typeof OrchestrationV2SavedMessageJson.Type;
+
+export const OrchestrationV2ListSavedMessagesInput = Schema.Struct({
+  /** Every environment when absent. */
+  threadIds: Schema.optionalKey(Schema.Array(ThreadId)),
+});
+export type OrchestrationV2ListSavedMessagesInput =
+  typeof OrchestrationV2ListSavedMessagesInput.Type;
+
+export const OrchestrationV2ListSavedMessagesResult = Schema.Struct({
+  messages: Schema.Array(OrchestrationV2SavedMessage),
+});
+export type OrchestrationV2ListSavedMessagesResult =
+  typeof OrchestrationV2ListSavedMessagesResult.Type;
 
 export const OrchestrationV2PlanStep = Schema.Struct({
   id: TrimmedNonEmptyString,
@@ -2231,6 +2266,11 @@ export const OrchestrationV2DomainEvent = Schema.Union([
   }),
   Schema.Struct({
     ...OrchestrationV2EventBase.fields,
+    type: Schema.Literal("message.saved"),
+    payload: OrchestrationV2ConversationMessage,
+  }),
+  Schema.Struct({
+    ...OrchestrationV2EventBase.fields,
     type: Schema.Literal("turn-item.updated"),
     payload: OrchestrationV2TurnItem,
   }),
@@ -2709,6 +2749,7 @@ export type OrchestrationV2RuntimeRequestJson = typeof OrchestrationV2RuntimeReq
 export const OrchestrationV2ConversationMessageJson = OrchestrationV2ConversationMessage.mapFields(
   (fields) => ({
     ...fields,
+    savedAt: Schema.optional(Schema.NullOr(Schema.DateTimeUtcFromString)),
     createdAt: Schema.DateTimeUtcFromString,
     updatedAt: Schema.DateTimeUtcFromString,
   }),
@@ -3184,6 +3225,11 @@ export const OrchestrationV2DomainEventJson = Schema.Union([
   }),
   Schema.Struct({
     ...OrchestrationV2JsonEventBaseFields,
+    type: Schema.Literal("message.saved"),
+    payload: OrchestrationV2ConversationMessageJson,
+  }),
+  Schema.Struct({
+    ...OrchestrationV2JsonEventBaseFields,
     type: Schema.Literal("turn-item.updated"),
     payload: OrchestrationV2TurnItemJson,
   }),
@@ -3394,6 +3440,13 @@ export const OrchestrationV2Command = Schema.Union([
     type: Schema.Literal("thread.mark-unread"),
     commandId: CommandId,
     threadId: ThreadId,
+  }),
+  Schema.Struct({
+    type: Schema.Literal("message.saved.set"),
+    commandId: CommandId,
+    threadId: ThreadId,
+    messageId: MessageId,
+    saved: Schema.Boolean,
   }),
   Schema.Struct({
     type: Schema.Literal("thread.metadata.update"),
@@ -4016,6 +4069,7 @@ export const ORCHESTRATION_V2_WS_METHODS = {
   getWorktreeThreadIds: "orchestration.getWorktreeThreadIds",
   getOlderSettledThreads: "orchestration.getOlderSettledThreads",
   getThreadProjection: "orchestration.getThreadProjection",
+  listSavedMessages: "orchestration.listSavedMessages",
   getWorkflowScript: "orchestration.getWorkflowScript",
   getNativeChildWork: "orchestration.getNativeChildWork",
   stopWorkflow: "orchestration.stopWorkflow",
@@ -4715,6 +4769,10 @@ export const OrchestrationV2RpcSchemas = {
   getThreadProjection: {
     input: OrchestrationV2GetThreadProjectionInput,
     output: OrchestrationV2ThreadProjection,
+  },
+  listSavedMessages: {
+    input: OrchestrationV2ListSavedMessagesInput,
+    output: OrchestrationV2ListSavedMessagesResult,
   },
   stopWorkflow: {
     input: OrchestrationV2StopWorkflowInput,

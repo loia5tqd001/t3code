@@ -148,6 +148,11 @@ export interface VisitThreadInput extends ThreadCommandInput {
 
 export type MarkThreadUnreadInput = ThreadCommandInput;
 
+export interface SetMessageSavedInput extends ThreadCommandInput {
+  readonly messageId: MessageId;
+  readonly saved: boolean;
+}
+
 export interface UpdateThreadMetadataInput extends ThreadCommandInput {
   readonly limitRecovery?: import("@t3tools/contracts").OrchestrationV2LimitRecoveryUpdate | null;
   readonly title?: string;
@@ -729,6 +734,18 @@ export const markThreadUnread = Effect.fn("EnvironmentCommands.markThreadUnread"
     type: "thread.mark-unread",
     commandId: yield* allocateCommandId(input),
     threadId: input.threadId,
+  });
+});
+
+export const setMessageSaved = Effect.fn("EnvironmentCommands.setMessageSaved")(function* (
+  input: SetMessageSavedInput,
+) {
+  return yield* dispatch({
+    type: "message.saved.set",
+    commandId: yield* allocateCommandId(input),
+    threadId: input.threadId,
+    messageId: input.messageId,
+    saved: input.saved,
   });
 });
 

@@ -13,6 +13,7 @@ import {
   AuthSourceControlWriteScope,
   EnvironmentAuthorizationError,
   EnvironmentId,
+  MessageId,
   type ScopedThreadRef,
   ThreadId,
   sessionGrantsScope,
@@ -338,6 +339,9 @@ export function useThreadActions() {
     reportFailure: false,
   });
   const markThreadUnread = useMarkThreadUnread();
+  const setMessageSavedMutation = useOrchestrationCommand(threadEnvironment.setMessageSaved, {
+    reportFailure: false,
+  });
   const createProjectFromThread = useAtomCommand(projectEnvironment.createFromThread, {
     reportFailure: false,
   });
@@ -1060,6 +1064,11 @@ export function useThreadActions() {
     reorderPinnedThread,
     reorderActiveThread,
     markThreadUnread,
+    setMessageSaved: (target: ScopedThreadRef, messageId: MessageId, saved: boolean) =>
+      setMessageSavedMutation({
+        environmentId: target.environmentId,
+        input: { threadId: target.threadId, messageId, saved },
+      }),
     setThreadAutoSettle,
     turnThreadIntoProject: (target: ScopedThreadRef) =>
       createProjectFromThread({

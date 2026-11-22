@@ -427,6 +427,11 @@ export function applyOrchestrationV2ProjectionEvent(
       return { ...base, runtimeRequests: upsertEntity(base.runtimeRequests, event.payload) };
     case "message.updated":
       return { ...base, messages: upsertEntity(base.messages, event.payload) };
+    case "message.saved":
+      return {
+        ...projection,
+        messages: upsertEntity(projection.messages, event.payload),
+      };
     case "plan.updated":
       return { ...base, plans: upsertEntity(base.plans, event.payload) };
     case "turn-item.updated": {

@@ -28,6 +28,7 @@ import { ThreadAutomationsPanel } from "./ThreadAutomationsPanel";
 import { ThreadRelationshipsPanel } from "./ThreadRelationshipsControl";
 import { ThreadRepositorySections } from "./ThreadRepositorySections";
 import { ThreadServersPanel } from "./ThreadServersPanel";
+import { ThreadSavedMessages } from "./ThreadSavedMessages";
 import {
   ThreadDetailsContext,
   ThreadDetailsMetrics,
@@ -96,6 +97,12 @@ interface ThreadDetailsPanelProps extends Pick<
   onOpenSideChat?: (() => void) | undefined;
   onFork?: (() => void) | undefined;
   canFork?: boolean;
+  canSaveMessages?: boolean;
+  onSetMessageSaved?: (
+    messageId: import("@t3tools/contracts").MessageId,
+    saved: boolean,
+  ) => Promise<unknown>;
+  onOpenSavedMessage?: (message: import("@t3tools/contracts").OrchestrationV2SavedMessage) => void;
   usage: ThreadDetailsUsageInput;
 }
 
@@ -322,6 +329,20 @@ export function ThreadDetailsPanel(props: ThreadDetailsPanelProps) {
                   threadId={props.threadId}
                   showLineage
                   showSideChats={false}
+                />
+              ) : null}
+
+              {!props.draftId && visible.savedMessages && props.canSaveMessages ? (
+                <ThreadSavedMessages
+                  threadRef={activeThreadRef}
+                  onUnsave={(messageId) =>
+                    props.onSetMessageSaved
+                      ? props.onSetMessageSaved(messageId, false)
+                      : Promise.resolve()
+                  }
+                  onOpenSavedMessage={(message) => {
+                    props.onOpenSavedMessage?.(message);
+                  }}
                 />
               ) : null}
 

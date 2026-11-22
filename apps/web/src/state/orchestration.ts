@@ -9,6 +9,8 @@ export const orchestrationEnvironment = createOrchestrationEnvironmentAtoms(conn
   shellState: environmentShell.stateValueAtom,
 });
 
+export const savedMessages = orchestrationEnvironment.savedMessages;
+
 export const threadTitlesRead = createEnvironmentRpcCommand(connectionAtomRuntime, {
   label: "environment-data:orchestration:thread-titles-read",
   tag: ORCHESTRATION_V2_WS_METHODS.getThreadTitles,

@@ -6,7 +6,7 @@ import { T, useGT, useMessages } from "gt-react";
 import { memo, use, useState } from "react";
 import { type ChatMessage, type TurnDiffSummary } from "../../types";
 import ChatMarkdown from "../ChatMarkdown";
-import { GitForkIcon, ReplyIcon } from "lucide-react";
+import { BookmarkIcon, GitForkIcon, ReplyIcon } from "lucide-react";
 import { captureAssistantMessageOpening } from "~/lib/assistantTextSelection";
 import { responseContextRecord } from "~/lib/composerContextRecords";
 import { Button } from "../ui/button";
@@ -58,16 +58,16 @@ export function AssistantTimelineRow({ row }: { row: Extract<TimelineRow, { kind
 
   return (
     <>
-      <div className="relative min-w-0 px-1 py-0.5">
-        <MessageAuthorHeading>T3 Code</MessageAuthorHeading>
-        <div data-thread-find-text="true">
-          <AssistantCitationSource
-            messageId={row.message.id}
-            {...(ctx.threadRef ? { threadRef: ctx.threadRef } : {})}
-            itemKey={row.id}
-            request={ctx.citationRequest}
-            listRef={ctx.listRef}
-          >
+      <AssistantCitationSource
+        messageId={row.message.id}
+        {...(ctx.threadRef ? { threadRef: ctx.threadRef } : {})}
+        itemKey={row.id}
+        request={ctx.citationRequest}
+        listRef={ctx.listRef}
+      >
+        <div className="relative min-w-0 px-1 py-0.5">
+          <MessageAuthorHeading>T3 Code</MessageAuthorHeading>
+          <div data-thread-find-text="true">
             <ChatMarkdown
               text={messageText}
               renderInsights
@@ -86,31 +86,31 @@ export function AssistantTimelineRow({ row }: { row: Extract<TimelineRow, { kind
               onRunShellCommand={ctx.onRunShellCommand}
               onImageExpand={ctx.onImageExpand}
             />
-          </AssistantCitationSource>
-        </div>
-        {ctx.onOpenTurnDiff ? (
-          <AssistantChangedFilesSection
-            turnSummary={row.assistantTurnDiffSummary}
-            routeThreadKey={ctx.routeThreadKey}
-            resolvedTheme={ctx.resolvedTheme}
-            onOpenTurnDiff={ctx.onOpenTurnDiff}
-          />
-        ) : null}
-        {!row.showAssistantMeta && row.projectedItem?.item.status === "interrupted" ? (
-          <div className="mt-1.5 flex">
-            <AssistantStatusBadge status="interrupted" />
           </div>
-        ) : null}
-        {row.showAssistantMeta ? (
-          <AssistantMessageMeta
-            className="mt-1.5"
-            projectedItem={row.projectedItem}
-            message={row.message}
-            showCopyButton={row.showAssistantCopyButton}
-            copyStreaming={row.assistantCopyStreaming}
-          />
-        ) : null}
-      </div>
+          {ctx.onOpenTurnDiff ? (
+            <AssistantChangedFilesSection
+              turnSummary={row.assistantTurnDiffSummary}
+              routeThreadKey={ctx.routeThreadKey}
+              resolvedTheme={ctx.resolvedTheme}
+              onOpenTurnDiff={ctx.onOpenTurnDiff}
+            />
+          ) : null}
+          {!row.showAssistantMeta && row.projectedItem?.item.status === "interrupted" ? (
+            <div className="mt-1.5 flex">
+              <AssistantStatusBadge status="interrupted" />
+            </div>
+          ) : null}
+          {row.showAssistantMeta ? (
+            <AssistantMessageMeta
+              className="mt-1.5"
+              projectedItem={row.projectedItem}
+              message={row.message}
+              showCopyButton={row.showAssistantCopyButton}
+              copyStreaming={row.assistantCopyStreaming}
+            />
+          ) : null}
+        </div>
+      </AssistantCitationSource>
     </>
   );
 }
@@ -255,6 +255,9 @@ function AssistantMessageMeta({
         showCopyButton={showCopyButton}
         streaming={copyStreaming}
       />
+      {ctx.canSaveMessages && !message.streaming ? (
+        <SaveMessageButton messageId={message.id} />
+      ) : null}
       {projectedItem?.item.type === "assistant_message" ? (
         <AssistantForkButton projectedItem={projectedItem} />
       ) : null}
@@ -278,6 +281,42 @@ function AssistantMessageMeta({
         </Tooltip>
       )}
     </div>
+  );
+}
+
+function SaveMessageButton({ messageId }: { messageId: string }) {
+  const ctx = use(TimelineRowCtx);
+  const gt = useGT();
+  const [busy, setBusy] = useState(false);
+  const saved = ctx.savedMessageIds.has(messageId);
+  const toggle = () => {
+    const onSetMessageSaved = ctx.onSetMessageSaved;
+    if (!onSetMessageSaved || busy) return;
+    setBusy(true);
+    void onSetMessageSaved(messageId, !saved).finally(() => setBusy(false));
+  };
+  const label = saved ? gt("Unsave message") : gt("Save message");
+  return (
+    <Tooltip>
+      <TooltipTrigger
+        render={
+          <Button
+            type="button"
+            size="xs"
+            variant="ghost-muted"
+            disabled={busy}
+            aria-label={label}
+            aria-pressed={saved}
+            onClick={toggle}
+          />
+        }
+      >
+        <BookmarkIcon className={cn("size-3", saved && "fill-current text-primary")} />
+      </TooltipTrigger>
+      <TooltipPopup side="top">
+        <p>{label}</p>
+      </TooltipPopup>
+    </Tooltip>
   );
 }
 

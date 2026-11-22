@@ -50,6 +50,9 @@ export interface TimelineRowSharedState {
   pendingApprovals: ReadonlyMap<RuntimeRequestId, PendingApproval>;
   respondingRequestIds: ReadonlyArray<RuntimeRequestId>;
   canOperateThread: boolean;
+  canSaveMessages: boolean;
+  savedMessageIds: ReadonlySet<string>;
+  onSetMessageSaved: ((messageId: string, saved: boolean) => Promise<unknown>) | undefined;
   onRespondToApproval:
     | ((requestId: RuntimeRequestId, decision: ProviderApprovalDecision) => Promise<unknown>)
     | undefined;

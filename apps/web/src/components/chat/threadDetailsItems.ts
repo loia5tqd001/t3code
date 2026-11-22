@@ -19,6 +19,7 @@ export const THREAD_DETAILS_ITEMS = [
     defaultVisible: true,
   },
   { id: "automations", label: msg("Automations"), defaultVisible: true },
+  { id: "savedMessages", label: msg("Saved messages"), defaultVisible: true },
   {
     id: "lineage",
     label: msg("Lineage", { $context: "thread details item: parent and child agents" }),

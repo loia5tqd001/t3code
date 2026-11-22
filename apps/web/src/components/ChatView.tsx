@@ -143,6 +143,7 @@ import { BackgroundThreadContext } from "./chat/backgroundThread";
 import { WorkspaceMutationIdContext } from "./chat/ChatMarkdownMedia";
 import { useLocation, useNavigate } from "@tanstack/react-router";
 import {
+  assistantCitationHash,
   assistantCitationFromLocation,
   useSideChatCitationReveal,
 } from "../lib/assistantCitationNavigation";
@@ -215,7 +216,7 @@ import { cn } from "~/lib/utils";
 import { COLLAPSED_SIDEBAR_TITLEBAR_INSET_CLASS } from "~/workspaceTitlebar";
 import { toastManager } from "./ui/toast";
 import { projectScriptIdFromCommand } from "~/projectScripts";
-import { newMessageId } from "~/lib/utils";
+import { newMessageId, randomUUID } from "~/lib/utils";
 import {
   isInSideChatPane,
   resolveThreadOpenRoute,
@@ -261,7 +262,7 @@ import { type TerminalContextDraft } from "../lib/terminalContext";
 import { collectInlineContextIds } from "../lib/composerContextReferences";
 import { selectThreadTerminalUiState, useTerminalUiStateStore } from "../terminalUiStateStore";
 import { useKnownTerminalSessions, useThreadRunningTerminalIds } from "../state/terminalSessions";
-import { useEnvironmentQueryRefresh } from "../state/query";
+import { useEnvironmentQuery, useEnvironmentQueryRefresh } from "../state/query";
 import { revisionedQuery } from "../state/revisionedQuery";
 import { useEnvironmentScope } from "~/state/session";
 import { primaryServerKeybindingsAtom, serverEnvironment } from "../state/server";
@@ -292,6 +293,7 @@ import {
   useThreadHistory,
   useQuietThreadShell,
   useThreadCheckpointSummaries,
+  readEnvironmentSupportsSavedMessages,
 } from "../state/entities";
 import { useEnvironmentShellHasSnapshot } from "../state/shell";
 import { ChatComposer, type ChatComposerHandle } from "./chat/ChatComposer";
@@ -330,6 +332,7 @@ import {
 } from "./chat/PanelLayoutControls";
 import type { ExpandedImagePreview } from "./chat/ExpandedImagePreview";
 import { ThreadDetailsPanel } from "./chat/ThreadDetailsPanel";
+import { savedMessages } from "../state/orchestration";
 import { NoActiveThreadState } from "./NoActiveThreadState";
 import {
   resolveEffectiveEnvMode,
@@ -471,6 +474,51 @@ export default function ChatView(props: ChatViewProps) {
   const embedded = parentPanel !== undefined;
   const panelHostShell = useQuietThreadShell(parentPanel?.hostRef ?? null);
   const canOperateThread = useEnvironmentScope(environmentId, AuthOrchestrationOperateScope);
+  const savedMessageQuery = useEnvironmentQuery(
+    readEnvironmentSupportsSavedMessages(environmentId)
+      ? savedMessages({ environmentId, input: { threadIds: [threadId] } })
+      : null,
+  );
+  const navigate = useNavigate();
+  const savedMessageIds = new Set(
+    savedMessageQuery.data?.messages.map((message) => message.messageId) ?? [],
+  );
+  const savedMessageIdSet: ReadonlySet<string> = savedMessageIds;
+  const setMessageSavedMutation = useOrchestrationCommand(threadEnvironment.setMessageSaved, {
+    reportFailure: false,
+  });
+  const setMessageSaved = async (messageId: string, saved: boolean) => {
+    const result = await setMessageSavedMutation({
+      environmentId,
+      input: { threadId, messageId: messageId as MessageId, saved },
+    });
+    if (result._tag === "Success") savedMessageQuery.refresh();
+    return result;
+  };
+  const setMessageSavedStable = useStableCallback(setMessageSaved);
+  const openSavedMessage = (message: import("@t3tools/contracts").OrchestrationV2SavedMessage) => {
+    void navigate({
+      to: "/$environmentId/$threadId",
+      params: { environmentId, threadId: message.threadId },
+      hash: assistantCitationHash({
+        version: 1,
+        environmentId,
+        threadId: message.threadId,
+        messageId: message.messageId,
+        text: message.text || " ",
+        start: 0,
+        end: Math.max(1, message.text.length),
+        prefix: "",
+        suffix: "",
+      }),
+      state: {
+        assistantCitationActivation: randomUUID(),
+        savedMessageExpectedRole: message.role,
+      },
+      resetScroll: false,
+    });
+  };
+  const openSavedMessageStable = useStableCallback(openSavedMessage);
   const canOperateTerminal = useEnvironmentScope(environmentId, AuthTerminalOperateScope);
   const draftId = routeKind === "draft" ? props.draftId : null;
   const handleNewThread = useNewThreadHandler();
@@ -610,12 +658,14 @@ export default function ChatView(props: ChatViewProps) {
   const settings = useEnvironmentSettings(environmentId);
   const clientSettingsHydrated = useClientSettingsHydrated();
   const timestampFormat = settings.timestampFormat;
-  const navigate = useNavigate();
   // Selects primitives: an object here is new on every router store update, which
   // re-renders ChatView on unrelated navigation state changes.
   const citationHref = useLocation({ select: (location) => location.href });
   const citationKey = useLocation({
     select: (location) => location.state.assistantCitationActivation ?? location.state.__TSR_key,
+  });
+  const savedMessageExpectedRole = useLocation({
+    select: (location) => location.state.savedMessageExpectedRole,
   });
   const citationLocation = { href: citationHref, key: citationKey };
   const locationCitation = assistantCitationFromLocation(citationLocation.href);
@@ -624,7 +674,11 @@ export default function ChatView(props: ChatViewProps) {
     locationCitation &&
     locationCitation.environmentId === environmentId &&
     locationCitation.threadId === threadId
-      ? { citation: locationCitation, key: citationActivation }
+      ? {
+          citation: locationCitation,
+          key: citationActivation,
+          ...(savedMessageExpectedRole ? { expectedRole: savedMessageExpectedRole } : {}),
+        }
       : null
   ) as AssistantCitationRequest | null;
   useSideChatCitationReveal(embedded ? null : routeThreadRef, locationCitation, citationActivation);
@@ -3633,6 +3687,11 @@ export default function ChatView(props: ChatViewProps) {
                   respondingRequestIds={respondingRequestIds}
                   onRespondToApproval={onRespondToApprovalStable}
                   canOperateThread={canOperateThread}
+                  canSaveMessages={
+                    canOperateThread && readEnvironmentSupportsSavedMessages(environmentId)
+                  }
+                  savedMessageIds={savedMessageIdSet}
+                  onSetMessageSaved={setMessageSavedStable}
                   threadDetailRef={routeThreadDetailRef}
                   entriesInput={timelineEntriesInput}
                   draftEntries={isServerThread ? null : draftTimelineEntries}
@@ -4166,6 +4225,12 @@ export default function ChatView(props: ChatViewProps) {
                         canFork: forkableRunId(activeLatestRun, activeRuntime) !== null,
                       }
                     : {})}
+                  canSaveMessages={
+                    canOperateThread &&
+                    readEnvironmentSupportsSavedMessages(activeThread.environmentId)
+                  }
+                  onSetMessageSaved={setMessageSavedStable}
+                  onOpenSavedMessage={openSavedMessageStable}
                   usage={{
                     providerInstanceId: activeProviderInstanceId,
                     model: activeUsageModel,

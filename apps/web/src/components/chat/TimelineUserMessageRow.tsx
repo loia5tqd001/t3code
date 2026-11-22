@@ -36,6 +36,7 @@ import {
 import ChatMarkdown from "../ChatMarkdown";
 import {
   CalendarClockIcon,
+  BookmarkIcon,
   ChevronDownIcon,
   DownloadIcon,
   EyeIcon,
@@ -62,6 +63,7 @@ import {
 } from "./SnapShotAttachmentDetails";
 import { GuestMessageName, guestBubbleClassName } from "./guestMessageStyle";
 import { MessageCopyButton } from "./MessageCopyButton";
+import { AssistantCitationSource } from "./AssistantCitationSource";
 import { promptLinkFor } from "../promptLinks/copyPromptLink";
 import { PierreEntryIcon } from "./PierreEntryIcon";
 import { formatBytes } from "../../lib/formatBytes";
@@ -280,7 +282,15 @@ export function UserMessageRow({ row }: { row: Extract<TimelineRow, { kind: "mes
       {modelSwitch ? (
         <ModelSwitchRow environmentId={ctx.activeThreadEnvironmentId} modelSwitch={modelSwitch} />
       ) : null}
-      <UserMessageContent row={row} />
+      <AssistantCitationSource
+        messageId={row.message.id}
+        {...(ctx.threadRef ? { threadRef: ctx.threadRef } : {})}
+        itemKey={row.id}
+        request={ctx.citationRequest}
+        listRef={ctx.listRef}
+      >
+        <UserMessageContent row={row} />
+      </AssistantCitationSource>
     </>
   );
 }
@@ -880,6 +890,13 @@ function UserTimelineRow({ row }: { row: Extract<TimelineRow, { kind: "message" 
       </Tooltip>
       <div className={cn("flex items-center gap-0.5", floatActions && "flex-wrap justify-end")}>
         <ForkRequestButton row={row} />
+        {ctx.canSaveMessages &&
+        row.message.role === "user" &&
+        !row.message.streaming &&
+        row.message.senderThreadId === undefined &&
+        row.message.linkedSender === undefined ? (
+          <SaveMessageButton messageId={row.message.id} />
+        ) : null}
         {typeof revertTurnCount === "number" && (
           <RevertUserMessageButton turnCount={revertTurnCount} messageId={row.message.id} />
         )}
@@ -1176,6 +1193,40 @@ function UserMessageIntentMarker({
           : intent === "promoted_queued_to_steer"
             ? gt("Originally queued, then promoted to steer the active turn")
             : gt("Steered the active turn")}
+      </TooltipPopup>
+    </Tooltip>
+  );
+}
+
+function SaveMessageButton({ messageId }: { messageId: string }) {
+  const ctx = use(TimelineRowCtx);
+  const gt = useGT();
+  const [busy, setBusy] = useState(false);
+  const saved = ctx.savedMessageIds.has(messageId);
+  const label = saved ? gt("Unsave message") : gt("Save message");
+  return (
+    <Tooltip>
+      <TooltipTrigger
+        render={
+          <Button
+            type="button"
+            size="xs"
+            variant="ghost"
+            disabled={busy}
+            aria-label={label}
+            aria-pressed={saved}
+            onClick={() => {
+              if (!ctx.onSetMessageSaved || busy) return;
+              setBusy(true);
+              void ctx.onSetMessageSaved(messageId, !saved).finally(() => setBusy(false));
+            }}
+          />
+        }
+      >
+        <BookmarkIcon className={cn("size-3", saved && "fill-current text-primary")} />
+      </TooltipTrigger>
+      <TooltipPopup side="top">
+        <p>{label}</p>
       </TooltipPopup>
     </Tooltip>
   );

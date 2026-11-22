@@ -36,6 +36,8 @@ import type {
   OrchestrationV2ConversationMessage,
   OrchestrationV2ContextTransfer,
   OrchestrationV2DomainEvent,
+  OrchestrationV2ListSavedMessagesInput,
+  OrchestrationV2ListSavedMessagesResult,
   OrchestrationV2OlderSettledCount,
   OrchestrationV2OlderSettledCursor,
   OrchestrationV2ProjectedTurnItem,
@@ -96,6 +98,7 @@ import * as Context from "effect/Context";
 import * as DateTime from "effect/DateTime";
 import * as Effect from "effect/Effect";
 import * as Layer from "effect/Layer";
+import * as Option from "effect/Option";
 import * as Result from "effect/Result";
 import * as Schema from "effect/Schema";
 import * as SqlClient from "effect/sql/SqlClient";
@@ -177,13 +180,24 @@ export class ProjectionStoreReadError extends Schema.TaggedError<ProjectionStore
   }
 }
 
+export class ProjectionStoreGlobalReadError extends Schema.TaggedError<ProjectionStoreGlobalReadError>()(
+  "ProjectionStoreGlobalReadError",
+  { cause: Schema.optional(Schema.Defect()) },
+) {
+  override get message(): string {
+    return "Failed to read orchestration projections.";
+  }
+}
+
 export const ProjectionStoreV2Error = Schema.Union([
   ProjectionStoreSetupError,
   ProjectionStoreApplyEventError,
   ProjectionStoreThreadNotFoundError,
   ProjectionStoreReadError,
+  ProjectionStoreGlobalReadError,
 ]);
 export type ProjectionStoreV2Error = typeof ProjectionStoreV2Error.Type;
+const isProjectionStoreGlobalReadError = Schema.is(ProjectionStoreGlobalReadError);
 
 export type ProjectionRecoveryKind =
   | "queued-runs"
@@ -598,6 +612,9 @@ export interface ProjectionStoreV2Shape {
     ReadonlyMap<MessageId, OrchestrationV2ConversationMessage>,
     ProjectionStoreV2Error
   >;
+  readonly listSavedMessages: (
+    input: OrchestrationV2ListSavedMessagesInput,
+  ) => Effect.Effect<OrchestrationV2ListSavedMessagesResult, ProjectionStoreV2Error>;
   readonly getThreadRecords: <K extends ProjectionRecordField>(
     threadId: ThreadId,
     fields: ReadonlyArray<K>,
@@ -1191,6 +1208,12 @@ export function applyToProjection(
     case "message.updated":
       return {
         ...base,
+        messages: upsertById(base.messages, event.payload),
+      };
+    case "message.saved":
+      return {
+        ...base,
+        updatedAt: projection.updatedAt,
         messages: upsertById(base.messages, event.payload),
       };
     case "turn-item.updated":
@@ -3102,6 +3125,46 @@ export const layer: Layer.Layer<ProjectionStoreV2, never, SqlClient.SqlClient> =
                 streaming = excluded.streaming,
                 created_at = excluded.created_at,
                 updated_at = excluded.updated_at,
+                payload_json = CASE
+                  WHEN json_type(excluded.payload_json, '$.savedAt') IS NULL
+                    THEN json_set(excluded.payload_json, '$.savedAt', json_extract(orchestration_v2_projection_messages.payload_json, '$.savedAt'))
+                  ELSE excluded.payload_json
+                END,
+                search_text = excluded.search_text
+            `;
+              break;
+            }
+            case "message.saved": {
+              const payloadJson = yield* encodeMessagePayload(event.payload);
+              const createdAt = yield* encodePayloadTimestamp(event.payload.createdAt);
+              const updatedAt = yield* encodePayloadTimestamp(event.payload.updatedAt);
+              yield* sql`
+              INSERT INTO orchestration_v2_projection_messages (
+                message_id,
+                thread_id,
+                run_id,
+                node_id,
+                role,
+                streaming,
+                created_at,
+                updated_at,
+                payload_json,
+                search_text
+              )
+              VALUES (
+                ${event.payload.id},
+                ${event.payload.threadId},
+                ${event.payload.runId},
+                ${event.payload.nodeId},
+                ${event.payload.role},
+                ${booleanInt(event.payload.streaming)},
+                ${createdAt},
+                ${updatedAt},
+                ${payloadJson},
+                ${readableSearchText(event.payload.text)}
+              )
+              ON CONFLICT(message_id)
+              DO UPDATE SET
                 payload_json = excluded.payload_json,
                 search_text = excluded.search_text
             `;
@@ -6985,6 +7048,75 @@ export const layer: Layer.Layer<ProjectionStoreV2, never, SqlClient.SqlClient> =
       (effect, threadId) => effect.pipe(Effect.mapError(controlReadError(threadId))),
     );
 
+    const listSavedMessages: ProjectionStoreV2Shape["listSavedMessages"] = (input) =>
+      sql<{
+        readonly message_id: string;
+        readonly thread_id: string;
+        readonly project_id: string;
+        readonly thread_title: string;
+        readonly role: string;
+        readonly text: string;
+        readonly text_length: number;
+        readonly saved_at: string;
+        readonly message_created_at: string;
+      }>`
+        SELECT
+          message.message_id,
+          message.thread_id,
+          thread.project_id,
+          thread.title AS thread_title,
+          message.role,
+          substr(json_extract(message.payload_json, '$.text'), 1, 400) AS text,
+          length(json_extract(message.payload_json, '$.text')) AS text_length,
+          json_extract(message.payload_json, '$.savedAt') AS saved_at,
+          message.created_at AS message_created_at
+        FROM orchestration_v2_projection_messages AS message
+        INNER JOIN orchestration_v2_projection_threads AS thread
+          ON thread.thread_id = message.thread_id
+        WHERE message.role IN ('user', 'assistant')
+          AND json_type(message.payload_json, '$.savedAt') = 'text'
+          AND thread.deleted_at IS NULL
+          ${
+            input.threadIds === undefined
+              ? sql``
+              : input.threadIds.length === 0
+                ? sql`AND 0`
+                : sql`AND message.thread_id IN ${sql.in(input.threadIds)}`
+          }
+        ORDER BY saved_at DESC, message.rowid DESC
+      `.pipe(
+        Effect.flatMap((rows) =>
+          Effect.forEach(rows, (row) => {
+            const savedAt = DateTime.make(row.saved_at);
+            const messageCreatedAt = DateTime.make(row.message_created_at);
+            if (Option.isNone(savedAt) || Option.isNone(messageCreatedAt)) {
+              return Effect.fail(
+                new ProjectionStoreGlobalReadError({
+                  cause: new Error(`Invalid saved message timestamp on ${row.message_id}.`),
+                }),
+              );
+            }
+            return Effect.succeed({
+              messageId: MessageId.make(row.message_id),
+              threadId: ThreadId.make(row.thread_id),
+              projectId: ProjectId.make(row.project_id),
+              threadTitle: row.thread_title,
+              role: row.role === "assistant" ? ("assistant" as const) : ("user" as const),
+              text: row.text,
+              textLength: row.text_length,
+              savedAt: savedAt.value,
+              messageCreatedAt: messageCreatedAt.value,
+            });
+          }),
+        ),
+        Effect.map((messages) => ({ messages })),
+        Effect.mapError((cause) =>
+          isProjectionStoreGlobalReadError(cause)
+            ? cause
+            : new ProjectionStoreGlobalReadError({ cause }),
+        ),
+      );
+
     const getThreadRecords: ProjectionStoreV2Shape["getThreadRecords"] = (
       threadId,
       fields,
@@ -9872,6 +10004,7 @@ export const layer: Layer.Layer<ProjectionStoreV2, never, SqlClient.SqlClient> =
       getNextTurnItemOrdinal: readOnReader(getNextTurnItemOrdinal),
       getTurnItem: readOnReader(getTurnItem),
       getMessagesById: readOnReader(getMessagesById),
+      listSavedMessages: readOnReader(listSavedMessages),
       getThreadRecords: (threadId, fields, filter) =>
         getThreadRecords(threadId, fields, filter).pipe(NodeSqliteClient.readOnly),
       getRuntimeRequest: readOnReader(getRuntimeRequest),

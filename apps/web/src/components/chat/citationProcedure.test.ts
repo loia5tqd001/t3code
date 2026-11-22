@@ -61,7 +61,7 @@ describe("loadCitedHistory", () => {
     const history = scriptedHistory([{ message: "other", hasMoreHistory: false }]);
     await expect(history.run()).resolves.toMatchObject({
       _tag: "failed",
-      title: "The citation does not refer to an assistant response",
+      title: "The citation does not refer to the expected message",
     });
   });
 

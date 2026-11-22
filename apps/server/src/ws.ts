@@ -2193,6 +2193,17 @@ export const layerWsRpc = (
                 ),
             ),
           ),
+        [ORCHESTRATION_V2_WS_METHODS.listSavedMessages]: (input) =>
+          threadManagement.listSavedMessages(input).pipe(
+            Effect.mapError(
+              (cause) =>
+                new OrchestrationV2GetThreadProjectionError({
+                  threadId: ThreadId.make(input.threadIds?.[0] ?? "saved-messages"),
+                  message: "Failed to load saved messages.",
+                  cause,
+                }),
+            ),
+          ),
         [ORCHESTRATION_V2_WS_METHODS.launchThread]: (input) =>
           Effect.annotateCurrentSpan({
             "orchestration_v2.command_id": input.commandId,

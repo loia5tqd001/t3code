@@ -432,6 +432,7 @@ export interface ThreadManagementServiceShape {
   readonly getMessageCount: Orchestrator.OrchestratorV2["Service"]["getMessageCount"];
   readonly getRunCount: Orchestrator.OrchestratorV2["Service"]["getRunCount"];
   readonly getMessagesById: Orchestrator.OrchestratorV2["Service"]["getMessagesById"];
+  readonly listSavedMessages: Orchestrator.OrchestratorV2["Service"]["listSavedMessages"];
   readonly getTurnItem: (input: {
     readonly threadId: ThreadId;
     readonly itemId: TurnItemId;
@@ -1827,6 +1828,9 @@ const make = Effect.gen(function* () {
         );
       },
     ),
+    listSavedMessages: Effect.fn("ThreadManagementService.listSavedMessages")(function (input) {
+      return orchestrator.listSavedMessages(input);
+    }),
     getTurnItem: Effect.fn("ThreadManagementService.getTurnItem")(function (input) {
       return ensureProjectionTranscript(input.threadId).pipe(
         Effect.andThen(orchestrator.getTurnItem(input)),

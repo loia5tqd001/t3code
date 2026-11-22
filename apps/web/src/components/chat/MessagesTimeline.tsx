@@ -31,6 +31,7 @@ import { useStableCallback } from "~/hooks/useStableCallback";
 const NOOP_USE_ARTIFACT_TEMPLATE = () => {};
 const EMPTY_PENDING_APPROVALS: ReadonlyArray<PendingApproval> = [];
 const EMPTY_RESPONDING_REQUEST_IDS: TimelineRowSharedState["respondingRequestIds"] = [];
+const EMPTY_SAVED_MESSAGE_IDS: ReadonlySet<string> = new Set();
 
 const NOOP_OPEN_ATTACHMENT = (_attachment: ChatFileAttachment) => {};
 
@@ -232,6 +233,9 @@ interface MessagesTimelineProps {
   heldApprovalRequestIds?: ReadonlySet<string> | undefined;
   respondingRequestIds?: TimelineRowSharedState["respondingRequestIds"];
   canOperateThread?: boolean;
+  canSaveMessages?: boolean;
+  savedMessageIds?: ReadonlySet<string>;
+  onSetMessageSaved?: (messageId: string, saved: boolean) => Promise<unknown>;
   onRespondToApproval?: TimelineRowSharedState["onRespondToApproval"];
   citationRequest?: AssistantCitationRequest | null;
   citationHistory?: CitedHistory;
@@ -363,6 +367,9 @@ const ConversationTimeline = memo(function ConversationTimeline({
   heldApprovalRequestIds,
   respondingRequestIds = EMPTY_RESPONDING_REQUEST_IDS,
   canOperateThread = false,
+  canSaveMessages = false,
+  savedMessageIds = EMPTY_SAVED_MESSAGE_IDS,
+  onSetMessageSaved,
   onRespondToApproval,
   citationRequest = null,
   citationHistory = CITED_HISTORY_LOADING,
@@ -864,6 +871,7 @@ const ConversationTimeline = memo(function ConversationTimeline({
           messageId: citationRequest.citation.messageId,
           entries: timelineEntries,
           rows,
+          ...(citationRequest.expectedRole ? { expectedRole: citationRequest.expectedRole } : {}),
         })
       : null,
     viewport: timelineViewportElement,
@@ -1124,6 +1132,9 @@ const ConversationTimeline = memo(function ConversationTimeline({
     pendingApprovals: pendingApprovalsByRequestId,
     respondingRequestIds,
     canOperateThread,
+    canSaveMessages,
+    savedMessageIds,
+    onSetMessageSaved,
     onRespondToApproval,
     citationRequest: readyCitationRequest,
     onReplyToResponse,

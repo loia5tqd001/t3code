@@ -88,6 +88,8 @@ export function observeAssistantCitationCommentSource({
 export interface AssistantCitationRequest {
   citation: AssistantCitation;
   key: string;
+  /** The row a link saved from the message list should reveal. */
+  expectedRole?: "assistant" | "user";
 }
 
 /** Navigation owns activation state across virtual row remounts. */

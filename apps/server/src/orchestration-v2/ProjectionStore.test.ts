@@ -1375,6 +1375,67 @@ it.effect("a compacted thread reads every run, but records and prompts only for 
   }).pipe(Effect.provide(layerTest)),
 );
 
+it.effect("keeps saved messages across normal updates and lists them by thread", () =>
+  Effect.gen(function* () {
+    const store = yield* ProjectionStore.ProjectionStoreV2;
+    const threadId = yield* addRolledBackRecoveryCandidate("saved-messages");
+    const now = yield* DateTime.now;
+    const messageId = MessageId.make("message:saved-messages:answer");
+    const message = {
+      id: messageId,
+      threadId,
+      runId: null,
+      nodeId: null,
+      role: "assistant" as const,
+      text: "Keep this answer for later.",
+      attachments: [],
+      streaming: false,
+      createdBy: "agent" as const,
+      creationSource: "server" as const,
+      createdAt: now,
+      updatedAt: now,
+    };
+    yield* store.apply({
+      id: EventId.make("event:saved-messages:created"),
+      type: "message.updated",
+      threadId,
+      occurredAt: now,
+      payload: message,
+    });
+    yield* store.apply({
+      id: EventId.make("event:saved-messages:saved"),
+      type: "message.saved",
+      threadId,
+      occurredAt: now,
+      payload: { ...message, savedAt: now },
+    });
+    // A later streamed edit omits savedAt, but the stored row must keep it.
+    yield* store.apply({
+      id: EventId.make("event:saved-messages:updated"),
+      type: "message.updated",
+      threadId,
+      occurredAt: now,
+      payload: { ...message, text: "Keep this answer for later. Updated." },
+    });
+
+    const listed = yield* store.listSavedMessages({});
+    const saved = listed.messages.find((row) => row.messageId === messageId);
+    assert.equal(saved?.text, "Keep this answer for later. Updated.");
+    assert.equal(listed.messages[0]?.threadTitle, "Rolled-back recovery candidate");
+    const restored = yield* store.getThreadProjection(threadId);
+    assert.notEqual(restored.messages.find((row) => row.id === messageId)?.savedAt, null);
+
+    yield* store.apply({
+      id: EventId.make("event:saved-messages:unsaved"),
+      type: "message.saved",
+      threadId,
+      occurredAt: now,
+      payload: { ...message, text: "Keep this answer for later. Updated.", savedAt: null },
+    });
+    assert.isEmpty((yield* store.listSavedMessages({})).messages);
+  }).pipe(Effect.provide(layerTest)),
+);
+
 it.effect("record reads filter notification sources without dropping matching message bodies", () =>
   Effect.gen(function* () {
     const store = yield* ProjectionStore.ProjectionStoreV2;

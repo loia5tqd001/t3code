@@ -139,6 +139,7 @@ function shouldPublishAgentAwarenessEvent(
           turnItemCanChangeUserWait(event.payload))
       );
     case "message.updated":
+    case "message.saved":
     case "plan.updated":
     case "checkpoint-scope.created":
     case "checkpoint.captured":

@@ -51,6 +51,7 @@ import {
   reorderPinnedThread,
   reorderActiveThread,
   setThreadAutoSettle,
+  setMessageSaved,
   settleThread,
   snoozeThread,
   startThreadTurn,
@@ -299,6 +300,12 @@ export function createThreadEnvironmentAtoms<R, E>(
     markUnread: createEnvironmentCommand(runtime, {
       label: "environment-data:commands:thread:mark-unread",
       execute: markThreadUnread,
+      scheduler,
+      concurrency,
+    }),
+    setMessageSaved: createEnvironmentCommand(runtime, {
+      label: "environment-data:commands:message:set-saved",
+      execute: setMessageSaved,
       scheduler,
       concurrency,
     }),

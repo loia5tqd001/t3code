@@ -36,6 +36,8 @@ import {
   OrchestrationV2Command,
   type OrchestrationV2InternalCommand,
   type OrchestrationV2LimitRecoveryUpdate,
+  type OrchestrationV2ListSavedMessagesInput,
+  type OrchestrationV2ListSavedMessagesResult,
   type OrchestrationV2Notification,
   type OrchestrationV2ServerCommand,
   type ThreadPullRequestLink,
@@ -459,6 +461,9 @@ export interface OrchestratorV2Shape {
     ReadonlyMap<MessageId, OrchestrationV2ConversationMessage>,
     OrchestratorV2Error
   >;
+  readonly listSavedMessages: (
+    input: OrchestrationV2ListSavedMessagesInput,
+  ) => Effect.Effect<OrchestrationV2ListSavedMessagesResult, OrchestratorV2Error>;
   readonly getTranscriptByteFloor: (
     threadId: ThreadId,
     limit: number,
@@ -657,6 +662,7 @@ function commandThreadId(command: OrchestrationV2ServerCommand): ThreadId {
     case "thread.tag.set":
     case "thread.visit":
     case "thread.mark-unread":
+    case "message.saved.set":
     case "thread.metadata.update":
     case "thread.pull-request.link":
     case "thread.pull-request.unlink":
@@ -4134,6 +4140,56 @@ const makeOrchestrator = Effect.fn("orchestrationV2.Orchestrator.layer")(functio
         lastVisitedAt: movesForward ? visitedAt.value : thread.lastVisitedAt,
         ...(opens ? { opens } : {}),
       },
+    });
+  });
+
+  const dispatchMessageSaved = Effect.fn("orchestrationV2.dispatch.messageSaved")(function* (
+    command: Extract<OrchestrationV2ServerCommand, { readonly type: "message.saved.set" }>,
+    events: Ref.Ref<Array<OrchestrationV2DomainEvent>>,
+  ) {
+    const thread = yield* projectionStore
+      .getThread(command.threadId)
+      .pipe(
+        Effect.mapError(
+          (cause) => new OrchestratorProjectionError({ threadId: command.threadId, cause }),
+        ),
+      );
+    if (thread.deletedAt !== null) {
+      return yield* new OrchestratorDispatchError({
+        commandId: command.commandId,
+        commandType: command.type,
+        cause: `Thread ${command.threadId} is deleted.`,
+      });
+    }
+    const messages = yield* projectionStore
+      .getMessagesById(command.threadId, [command.messageId])
+      .pipe(
+        Effect.mapError(
+          (cause) => new OrchestratorProjectionError({ threadId: command.threadId, cause }),
+        ),
+      );
+    const message = messages.get(command.messageId);
+    if (
+      message === undefined ||
+      (message.role !== "user" && message.role !== "assistant") ||
+      message.streaming
+    ) {
+      return yield* new OrchestratorDispatchError({
+        commandId: command.commandId,
+        commandType: command.type,
+        cause: `Message ${command.messageId} is not a completed user or assistant message in this thread.`,
+      });
+    }
+    const now = yield* DateTime.now;
+    if ((message.savedAt != null) === command.saved) return;
+    yield* emit(
+      events,
+      command,
+    )({
+      type: "message.saved",
+      threadId: command.threadId,
+      occurredAt: now,
+      payload: { ...message, savedAt: command.saved ? now : null },
     });
   });
 
@@ -15636,6 +15692,9 @@ const makeOrchestrator = Effect.fn("orchestrationV2.Orchestrator.layer")(functio
       case "thread.visit":
         yield* dispatchThreadVisit(command, events);
         break;
+      case "message.saved.set":
+        yield* dispatchMessageSaved(command, events);
+        break;
       case "thread.auto-settle": {
         // Recheck live state; changes and explicit overrides take precedence over the sweep snapshot.
         const thread = yield* projectionStore
@@ -17047,6 +17106,17 @@ const makeOrchestrator = Effect.fn("orchestrationV2.Orchestrator.layer")(functio
       return projectionStore
         .getMessagesById(threadId, messageIds)
         .pipe(Effect.mapError((cause) => new OrchestratorProjectionError({ threadId, cause })));
+    }),
+    listSavedMessages: Effect.fn("OrchestratorV2.listSavedMessages")(function (input) {
+      return projectionStore.listSavedMessages(input).pipe(
+        Effect.mapError(
+          (cause) =>
+            new OrchestratorProjectionError({
+              threadId: input.threadIds?.[0] ?? ThreadId.make("saved-messages"),
+              cause,
+            }),
+        ),
+      );
     }),
     getTranscriptByteFloor: Effect.fn("OrchestratorV2.getTranscriptByteFloor")(
       function (threadId, limit) {

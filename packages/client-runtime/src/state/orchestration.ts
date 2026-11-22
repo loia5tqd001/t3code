@@ -93,6 +93,12 @@ export function createOrchestrationEnvironmentAtoms<R, E>(
       // A removal can also be an archive, so it only prompts a re-check.
       refreshTrigger: refreshThreadLookup,
     }),
+    savedMessages: createEnvironmentRpcQueryAtomFamily(runtime, {
+      label: "environment-data:orchestration:saved-messages",
+      tag: ORCHESTRATION_V2_WS_METHODS.listSavedMessages,
+      staleTimeMs: 0,
+      idleTtlMs: 60_000,
+    }),
     threadLinkMetadata: createEnvironmentQueryAtomFamily(runtime, {
       label: "environment-data:orchestration:thread-link-metadata",
       staleTimeMs: 0,

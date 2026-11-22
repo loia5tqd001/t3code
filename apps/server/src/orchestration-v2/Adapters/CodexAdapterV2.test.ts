@@ -192,6 +192,45 @@ describe("CodexAdapterV2 runtime policy", () => {
       }),
   );
 
+  it.effect("adds Browserthing guidance only while Codex holds browser access", () =>
+    Effect.gen(function* () {
+      const build = (browserToolsAvailable: boolean) =>
+        CodexAdapterV2.buildCodexTurnStartParams({
+          nativeThreadId: "native-codex-browser-access",
+          codexInput: [{ type: "text", text: "Open the page." }],
+          runtimePolicy: { runtimeMode: "full-access", interactionMode: "default", cwd: null },
+          modelSelection: { instanceId: ProviderInstanceId.make("codex"), model: "gpt-5.4" },
+          hasT3Mcp: true,
+          browserToolsAvailable,
+        });
+
+      const enabled = yield* build(true);
+      assert.include(
+        enabled.additionalContext?.["t3_code_tools"]?.value ?? "",
+        "## Browser control (Browserthing)",
+      );
+      const disabled = yield* build(false);
+      assert.notProperty(disabled.additionalContext ?? {}, "t3_code_tools");
+
+      const noBrowserSession = yield* CodexAdapterV2.buildCodexTurnStartParams({
+        nativeThreadId: "native-codex-browser-access",
+        codexInput: [{ type: "text", text: "Open the page." }],
+        runtimePolicy: { runtimeMode: "full-access", interactionMode: "default", cwd: null },
+        modelSelection: { instanceId: ProviderInstanceId.make("codex"), model: "gpt-5.4" },
+        hasT3Mcp: true,
+        deviceToolsAvailable: true,
+      });
+      assert.notInclude(
+        noBrowserSession.additionalContext?.["t3_code_tools"]?.value ?? "",
+        "## Browser control (Browserthing)",
+      );
+      assert.include(
+        noBrowserSession.additionalContext?.["t3_code_tools"]?.value ?? "",
+        "## T3 Code devices",
+      );
+    }),
+  );
+
   it.effect("derives concrete Codex turn policies from every T3 runtime mode", () =>
     Effect.gen(function* () {
       const build = (
@@ -3944,6 +3983,7 @@ describe("CodexAdapterV2 post-settle continuation", () => {
         runtimePolicy: CODEX_TEST_RUNTIME_POLICY,
         modelSelection,
         hasT3Mcp: true,
+        browserToolsAvailable: true,
         cyberAccess: { defaultProgram: "daybreakBlue" },
       });
       assert.include(
@@ -11829,6 +11869,7 @@ describe("CodexAdapterV2 post-settle continuation", () => {
               runtimePolicy: CODEX_TEST_RUNTIME_POLICY,
               modelSelection: CODEX_TEST_MODEL_SELECTION,
               hasT3Mcp: true,
+              browserToolsAvailable: true,
             }),
             (params): CodexReplay.CodexAppServerReplayEntry => ({
               type: "expect_outbound",

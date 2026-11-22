@@ -769,7 +769,7 @@ describe("CursorAdapterV2", () => {
       const instanceId = ProviderInstanceId.make("cursor");
       const threadId = ThreadId.make("cursor-device-thread");
       const mcpSessions = yield* McpProviderSessions.McpProviderSessions;
-      const setDeviceAccess = (device: boolean) =>
+      const setMcpAccess = (browser: boolean, device: boolean) =>
         mcpSessions.set({
           environmentId: EnvironmentId.make("cursor-device-environment"),
           threadId,
@@ -777,7 +777,7 @@ describe("CursorAdapterV2", () => {
           providerInstanceId: instanceId,
           endpoint: "http://127.0.0.1:43123/mcp",
           authorizationHeader: "Bearer synthetic-cursor-token",
-          browserToolsAvailable: true,
+          browserToolsAvailable: browser,
           capabilities: new Set(device ? ["device"] : []),
         });
       const modelSelection = { instanceId, model: "composer-2.5" };
@@ -927,59 +927,86 @@ describe("CursorAdapterV2", () => {
         const sent = sentMessages.at(-1)!;
         return {
           orchestration: sent.includes("## T3 Code orchestration"),
+          browser: sent.includes("## Browser control (Browserthing)"),
           devices: sent.includes("## T3 Code devices"),
           runtime: sent.includes("<runtime_info>"),
         };
       });
-      const told = (orchestration: boolean, devices: boolean, runtime: boolean) => ({
+      const told = (
+        orchestration: boolean,
+        browser: boolean,
+        devices: boolean,
+        runtime: boolean,
+      ) => ({
         orchestration,
+        browser,
         devices,
         runtime,
       });
 
-      yield* setDeviceAccess(true);
-      assert.deepEqual(yield* send(), told(false, true, true));
-      assert.deepEqual(yield* send(), told(false, false, false));
+      yield* setMcpAccess(false, true);
+      assert.deepEqual(yield* send(), told(false, false, true, true));
+      assert.deepEqual(yield* send(), told(false, false, false, false));
       yield* send(true);
       assert.deepEqual(
         yield* send(),
-        told(true, true, true),
+        told(true, false, true, true),
         "compaction drops what the conversation was told",
       );
-      yield* setDeviceAccess(false);
-      assert.deepEqual(yield* send(), told(false, false, false));
-      yield* setDeviceAccess(true);
-      assert.deepEqual(yield* send(), told(false, true, false), "device access turned on later");
-      assert.deepEqual(yield* send(), told(false, false, false));
+      yield* setMcpAccess(false, false);
+      assert.deepEqual(yield* send(), told(false, false, false, false));
+      yield* setMcpAccess(false, true);
+      assert.deepEqual(
+        yield* send(),
+        told(false, false, true, false),
+        "device access turned on later",
+      );
+      assert.deepEqual(yield* send(), told(false, false, false, false));
+      yield* setMcpAccess(true, true);
+      assert.deepEqual(
+        yield* send(),
+        told(false, true, true, false),
+        "browser and device access turned on together",
+      );
+      yield* setMcpAccess(false, false);
+      assert.deepEqual(yield* send(), told(false, false, false, false));
+      yield* setMcpAccess(true, false);
+      assert.deepEqual(
+        yield* send(),
+        told(false, true, false, false),
+        "browser access turned on later",
+      );
+      assert.deepEqual(yield* send(), told(false, false, false, false));
+      yield* setMcpAccess(false, false);
 
       assert.deepEqual(
         yield* send(false, undefined, { model: "gemini-4-neon", status: "error" }),
-        told(false, false, true),
+        told(false, false, false, true),
         "a model change resends runtime instructions",
       );
       assert.deepEqual(
         yield* send(),
-        told(false, false, true),
+        told(false, false, false, true),
         "reverting after a failed model-change run resends runtime instructions",
       );
       assert.include(sentMessages.at(-1)!, "as composer-2.5");
       assert.deepEqual(
         yield* send(false, undefined, { status: "error" }),
-        told(false, false, false),
+        told(false, false, false, false),
         "an unchanged turn omits runtime instructions even when it fails",
       );
       assert.deepEqual(
         yield* send(),
-        told(false, false, false),
+        told(false, false, false, false),
         "a failed unchanged turn keeps delivered runtime instructions",
       );
       assert.deepEqual(
         yield* send(false, undefined, { model: "gemini-4-neon", status: "error" }),
-        told(false, false, true),
+        told(false, false, false, true),
       );
       assert.deepEqual(
         yield* send(false, undefined, { model: "gemini-4-neon" }),
-        told(false, false, true),
+        told(false, false, false, true),
         "a failed turn does not record runtime instructions as delivered",
       );
       assert.include(sentMessages.at(-1)!, "as gemini-4-neon");
@@ -988,24 +1015,25 @@ describe("CursorAdapterV2", () => {
           model: "gemini-4-neon",
           summaryCompleted: { failed: true },
         }),
-        told(false, false, false),
+        told(false, false, false, false),
       );
+      yield* setMcpAccess(true, false);
       assert.deepEqual(
         yield* send(false, undefined, {
           model: "gemini-4-neon",
           summaryCompleted: {},
         }),
-        told(false, false, false),
+        told(false, true, false, false),
         "a failed auto-compaction keeps delivered instructions",
       );
       assert.deepEqual(
         yield* send(false, undefined, { model: "gemini-4-neon" }),
-        told(true, true, true),
+        told(true, true, false, true),
         "auto-compaction drops what the conversation was told",
       );
       assert.deepEqual(
         yield* send(false, undefined, { model: "gemini-4-neon" }),
-        told(false, false, false),
+        told(false, false, false, false),
       );
 
       const keptTurn = lastProviderTurn!;
@@ -1025,7 +1053,7 @@ describe("CursorAdapterV2", () => {
       rewindFails = false;
       assert.deepEqual(
         yield* send(false, true, { model: "gemini-4-neon" }),
-        told(false, false, false),
+        told(false, false, false, false),
         "a failed rewind leaves the conversation, and what it was told, unchanged",
       );
       const rewound = yield* rollbackToKept;
@@ -1037,7 +1065,7 @@ describe("CursorAdapterV2", () => {
       );
       assert.deepEqual(
         yield* send(false, true, { model: "gemini-4-neon" }),
-        told(true, true, true),
+        told(true, true, false, true),
         "the rewound conversation may have dropped instructions a later turn carried",
       );
 
@@ -1059,7 +1087,7 @@ describe("CursorAdapterV2", () => {
       providerThread = rolledBack.providerThread;
       assert.deepEqual(
         yield* send(false, false, { model: "gemini-4-neon" }),
-        told(true, true, true),
+        told(true, true, false, true),
         "the fresh agent after a rollback has been told nothing",
       );
     }).pipe(

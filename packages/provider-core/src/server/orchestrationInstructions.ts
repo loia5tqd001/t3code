@@ -20,8 +20,7 @@ Ordinary coding tasks need no T3 tools.
 - T3 tools may load late. Try the name once before you call it absent.`,
   `### Visuals and preview
 
-- Answer data with a trend or comparison with a chart and show any visual the user asks for here: pass an HTML file path or inline HTML to \`html_preview\`, then \`html_render\`. A screenshot on disk or a text description doesn't show it. Never start a server for it. Page tools write only on user request. Never use them to show results. Asked for an image to post, send or use elsewhere: a \`.png\` file and its path, never \`html_render\`.
-- Never use \`preview_*\` unasked to verify or show your own edit. Use them when the current request asks for browser work, including recording edits, or names a page or tab. Don't repeat preview calls from an earlier turn. Public pages: web fetch or search unless browser work was asked; then preview tools only, no web fetch. Close a tab you opened before you reply, unless the user asked for it or uses it.`,
+- Answer data with a trend or comparison with a chart and show any visual the user asks for here: pass an HTML file path or inline HTML to \`html_preview\`, then \`html_render\`. A screenshot on disk or a text description doesn't show it. Never start a server for it. Page tools write only on user request. Never use them to show results. Asked for an image to post, send or use elsewhere: a \`.png\` file and its path, never \`html_render\`.`,
 ];
 
 export const T3_CODE_ORCHESTRATION_INSTRUCTIONS = `
@@ -29,11 +28,11 @@ export const T3_CODE_ORCHESTRATION_INSTRUCTIONS = `
 ${T3_CODE_ORCHESTRATION_SECTIONS.join("\n\n")}
 `;
 
-export const T3_CODE_BROWSER_TOOL_INSTRUCTIONS = `
+export const T3_CODE_BROWSERTHING_INSTRUCTIONS = `
 
-## T3 Code browser
+## Browser control (Browserthing)
 
-When browser work was asked, \`preview_*\` is the browser you share with the user: \`preview_status\` first, then \`preview_open\` if no tab can be automated. Prefer snapshot locators over coordinates. Switch browsers only if the tools are absent or \`preview_open\` says unsupported, the user asks, or two preview calls fail on one step. Then quote the error and switch.
+For all browser work (opening, inspecting, interacting with, automating, or screenshotting live web pages), always use the \`bt\` CLI (\`browserthing\` skill). Never use \`preview_*\`, Codex Chrome/Browser Use, Claude Chrome, Antigravity browser tools, or ad hoc Playwright/headless-browser scripts for browser control. Check \`bt sessions\` / \`bt tabs\` first, attach existing tabs with \`bt attach\` or open background tabs with \`bt new\`, prefer \`bt fetch\` / \`bt snapshot\` / \`bt inspect\` over screenshots, and close temporary \`[bt-tab]\` tabs with \`bt close\`.
 `;
 
 const T3_CODE_DEVICE_TOOLS = ["device_list", "device_open", "device_screenshot", "device_close"];
@@ -70,6 +69,7 @@ Investigate with read-only actions and do not edit files or otherwise execute th
 export interface T3AcpInstructionState {
   readonly interactionMode: ProviderInteractionMode;
   readonly hasT3Mcp: boolean;
+  readonly hasBrowserTools: boolean;
   readonly hasDeviceTools: boolean;
 }
 
@@ -84,6 +84,7 @@ export function t3AcpPromptWithInstructions(input: {
   if (
     input.previousState?.interactionMode === input.state.interactionMode &&
     input.previousState.hasT3Mcp === input.state.hasT3Mcp &&
+    input.previousState.hasBrowserTools === input.state.hasBrowserTools &&
     input.previousState.hasDeviceTools === input.state.hasDeviceTools
   ) {
     return input.prompt;
@@ -94,7 +95,7 @@ export function t3AcpPromptWithInstructions(input: {
       : T3_CODE_ACP_DEFAULT_MODE_INSTRUCTIONS,
     ...(input.state.hasT3Mcp
       ? [
-          T3_CODE_BROWSER_TOOL_INSTRUCTIONS.trim(),
+          ...(input.state.hasBrowserTools ? [T3_CODE_BROWSERTHING_INSTRUCTIONS.trim()] : []),
           ...(input.state.hasDeviceTools ? [T3_CODE_DEVICE_TOOL_INSTRUCTIONS] : []),
           T3_CODE_ORCHESTRATION_INSTRUCTIONS.trim(),
           T3_CODE_ACP_MCP_FALLBACK_INSTRUCTIONS,
@@ -104,10 +105,13 @@ export function t3AcpPromptWithInstructions(input: {
   return `<t3_code_instructions>\n${instructions.join("\n\n")}\n</t3_code_instructions>\n\n<user_request>\n${input.prompt}\n</user_request>`;
 }
 
-const orchestrationInstructions = (hasDeviceTools: boolean) =>
-  hasDeviceTools
-    ? `${T3_CODE_ORCHESTRATION_INSTRUCTIONS}\n${T3_CODE_DEVICE_TOOL_INSTRUCTIONS}\n`
-    : T3_CODE_ORCHESTRATION_INSTRUCTIONS;
+const orchestrationInstructions = (hasBrowserTools: boolean, hasDeviceTools: boolean) =>
+  [
+    "",
+    ...(hasBrowserTools ? [T3_CODE_BROWSERTHING_INSTRUCTIONS.trim(), ""] : []),
+    T3_CODE_ORCHESTRATION_INSTRUCTIONS.trim(),
+    ...(hasDeviceTools ? [T3_CODE_DEVICE_TOOL_INSTRUCTIONS] : []),
+  ].join("\n\n");
 
 function prependT3OrchestrationInstructions(prompt: string, instructions: string): string {
   return `<t3_code_orchestration_instructions>${instructions.trim()}</t3_code_orchestration_instructions>\n\n<user_request>\n${prompt}\n</user_request>`;
@@ -117,20 +121,28 @@ function prependT3OrchestrationInstructions(prompt: string, instructions: string
 export function t3OrchestrationPrompt(input: {
   readonly prompt: string;
   readonly hasT3Mcp: boolean;
+  readonly hasBrowserTools: boolean;
   readonly hasDeviceTools: boolean;
   readonly orchestrationDelivered: boolean;
+  readonly browserInstructionsDelivered: boolean;
   readonly deviceInstructionsDelivered: boolean;
   /** Guidance for this provider's own tools, sent until `providerInstructionsDelivered`. */
   readonly providerInstructions?: string;
   readonly providerInstructionsDelivered?: boolean;
 }): string {
   if (!input.hasT3Mcp) return input.prompt;
+  const missingToolInstructions = input.orchestrationDelivered
+    ? [
+        ...(input.hasBrowserTools && !input.browserInstructionsDelivered
+          ? [T3_CODE_BROWSERTHING_INSTRUCTIONS]
+          : []),
+        ...(input.hasDeviceTools && !input.deviceInstructionsDelivered
+          ? [T3_CODE_DEVICE_TOOL_INSTRUCTIONS]
+          : []),
+      ]
+    : [orchestrationInstructions(input.hasBrowserTools, input.hasDeviceTools)];
   const instructions = [
-    !input.orchestrationDelivered
-      ? orchestrationInstructions(input.hasDeviceTools)
-      : input.hasDeviceTools && !input.deviceInstructionsDelivered
-        ? T3_CODE_DEVICE_TOOL_INSTRUCTIONS
-        : undefined,
+    missingToolInstructions.length === 0 ? undefined : missingToolInstructions.join("\n\n"),
     input.providerInstructionsDelivered === true ? undefined : input.providerInstructions,
   ].flatMap((part) => (part === undefined ? [] : [part.trim()]));
   return instructions.length === 0
@@ -140,7 +152,8 @@ export function t3OrchestrationPrompt(input: {
 
 export function t3OrchestrationSystemPrompt(
   hasT3Mcp: boolean,
+  hasBrowserTools: boolean,
   hasDeviceTools: boolean,
 ): string | undefined {
-  return hasT3Mcp ? orchestrationInstructions(hasDeviceTools) : undefined;
+  return hasT3Mcp ? orchestrationInstructions(hasBrowserTools, hasDeviceTools) : undefined;
 }

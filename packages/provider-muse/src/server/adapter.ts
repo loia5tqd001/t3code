@@ -42,6 +42,7 @@ import * as Stream from "effect/Stream";
 import * as ProviderHost from "@t3tools/provider-core/server/ProviderHost";
 import * as McpProviderSession from "@t3tools/provider-core/server/mcpSession";
 import * as McpProviderSessions from "@t3tools/provider-core/server/McpProviderSessions";
+import { T3_CODE_BROWSERTHING_INSTRUCTIONS } from "@t3tools/provider-core/server/orchestrationInstructions";
 import { buildRuntimeInstructions } from "@t3tools/provider-core/server/runtimeInstructions";
 import { museModelCapabilities, resolveMuseReasoningEffort } from "./modelCatalog.ts";
 import {
@@ -2184,18 +2185,24 @@ export const makeMuseAdapterV2 = Effect.fn("makeMuseAdapterV2")(function* (
               turnInput.runtimePolicy.workspace?.extraRoots ?? [],
               (root) => museCanonicalPath(root).pipe(Effect.flatMap(museWorkspaceRoot)),
             );
+            const mcpSession = yield* mcpSessions.read(turnInput.threadId);
+            const runtimeInstructions = buildRuntimeInstructions({
+              harness: "Muse Code",
+              model: session.model ?? undefined,
+              reasoningEffort: effort,
+              runtimePolicy: turnInput.runtimePolicy,
+            });
             const result = yield* request(
               "turn/start",
               {
                 input: [
                   {
                     type: "text",
-                    text: buildRuntimeInstructions({
-                      harness: "Muse Code",
-                      model: session.model ?? undefined,
-                      reasoningEffort: effort,
-                      runtimePolicy: turnInput.runtimePolicy,
-                    }),
+                    text:
+                      runtimeInstructions +
+                      (mcpSession?.browserToolsAvailable
+                        ? `\n\n${T3_CODE_BROWSERTHING_INSTRUCTIONS.trim()}`
+                        : ""),
                   },
                   ...parts,
                 ],

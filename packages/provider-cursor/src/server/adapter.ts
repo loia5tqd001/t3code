@@ -60,7 +60,11 @@ import {
   rewriteCursorSkillMentions,
 } from "./skills.ts";
 import { cursorWorkspaceMcpServers } from "./workspaceMcpServers.ts";
-import { t3OrchestrationPrompt } from "@t3tools/provider-core/server/orchestrationInstructions";
+import {
+  T3_CODE_BROWSERTHING_INSTRUCTIONS,
+  T3_CODE_DEVICE_TOOL_INSTRUCTIONS,
+  t3OrchestrationPrompt,
+} from "@t3tools/provider-core/server/orchestrationInstructions";
 import { buildRuntimeInstructions } from "@t3tools/provider-core/server/runtimeInstructions";
 import * as IdAllocator from "@t3tools/provider-core/server/IdAllocator";
 import { makeProviderFailure } from "@t3tools/provider-core/server/failure";
@@ -1091,6 +1095,7 @@ export const makeCursorAdapterV2 = Effect.fn("makeCursorAdapterV2")(function* (
         const told = yield* Ref.make<{
           readonly agent: string;
           readonly orchestration: boolean;
+          readonly browser: boolean;
           readonly device: boolean;
           readonly backgroundWait: boolean;
           readonly runtime: string | undefined;
@@ -2456,6 +2461,7 @@ export const makeCursorAdapterV2 = Effect.fn("makeCursorAdapterV2")(function* (
                 yield* Ref.set(told, {
                   agent: context.run.agentId,
                   orchestration: false,
+                  browser: false,
                   device: false,
                   backgroundWait: false,
                   runtime: undefined,
@@ -2819,9 +2825,11 @@ export const makeCursorAdapterV2 = Effect.fn("makeCursorAdapterV2")(function* (
         const resolveUserMessage = Effect.fnUntraced(function* (
           turnInput: ProviderAdapter.ProviderAdapterV2TurnInput,
           mcpServers: Record<string, McpServerConfig> | undefined,
+          hasBrowserTools: boolean,
           hasDeviceTools: boolean,
           delivered: {
             readonly orchestration: boolean;
+            readonly browser: boolean;
             readonly device: boolean;
             readonly backgroundWait: boolean;
             readonly runtime: string | undefined;
@@ -2832,19 +2840,19 @@ export const makeCursorAdapterV2 = Effect.fn("makeCursorAdapterV2")(function* (
           if (rawText.trim() === "/compress" && turnInput.message.attachments.length === 0) {
             return { message: "/compress", prompt: undefined, runtimeInstructions: undefined };
           }
+          const instructionText = yield* providerMessageTextWithAttachmentPaths({
+            text: yield* resolveCursorSkillText(rawText, turnInput.runtimePolicy.cwd ?? undefined),
+            attachments: turnInput.message.attachments,
+            resolveAttachmentPath: host.resolveAttachmentPath,
+            resolveExtractedTextPath: host.resolveExtractedTextPath,
+          });
           const newText = t3OrchestrationPrompt({
-            prompt: yield* providerMessageTextWithAttachmentPaths({
-              text: yield* resolveCursorSkillText(
-                rawText,
-                turnInput.runtimePolicy.cwd ?? undefined,
-              ),
-              attachments: turnInput.message.attachments,
-              resolveAttachmentPath: host.resolveAttachmentPath,
-              resolveExtractedTextPath: host.resolveExtractedTextPath,
-            }),
+            prompt: instructionText,
             hasT3Mcp: mcpServers !== undefined,
+            hasBrowserTools,
             hasDeviceTools,
             orchestrationDelivered: delivered.orchestration,
+            browserInstructionsDelivered: delivered.browser,
             deviceInstructionsDelivered: delivered.device,
             providerInstructions: CURSOR_BACKGROUND_WAIT_INSTRUCTIONS,
             providerInstructionsDelivered: delivered.backgroundWait,
@@ -2904,6 +2912,10 @@ export const makeCursorAdapterV2 = Effect.fn("makeCursorAdapterV2")(function* (
             message: images.length === 0 ? text : ({ text, images } satisfies SDKUserMessage),
             prompt: userText,
             runtimeInstructions: sendRuntimeInstructions ? runtimeInstructions : undefined,
+            browserInstructionsDelivered:
+              hasBrowserTools && userText.includes(T3_CODE_BROWSERTHING_INSTRUCTIONS.trim()),
+            deviceInstructionsDelivered:
+              hasDeviceTools && userText.includes(T3_CODE_DEVICE_TOOL_INSTRUCTIONS.trim()),
           };
         });
 
@@ -2928,6 +2940,8 @@ export const makeCursorAdapterV2 = Effect.fn("makeCursorAdapterV2")(function* (
             });
             const mcpSession = yield* mcpSessions.read(turnInput.threadId);
             const mcpServers = cursorMcpServers(mcpSession);
+            const hasBrowserTools =
+              mcpServers !== undefined && mcpSession?.browserToolsAvailable === true;
             const hasDeviceTools =
               mcpServers !== undefined && mcpSession?.capabilities?.has("device") === true;
             const known = yield* Ref.get(told);
@@ -2937,6 +2951,7 @@ export const makeCursorAdapterV2 = Effect.fn("makeCursorAdapterV2")(function* (
                 ? known
                 : {
                     orchestration: turnInput.nativeThreadHasTurns ?? turnInput.runOrdinal > 1,
+                    browser: false,
                     device: false,
                     backgroundWait: false,
                     runtime: undefined,
@@ -2967,29 +2982,35 @@ export const makeCursorAdapterV2 = Effect.fn("makeCursorAdapterV2")(function* (
                 providerThreadId: turnInput.providerThread.id,
               });
             }
-            const { message, prompt, runtimeInstructions } =
-              resume === "native"
+            const {
+              message,
+              prompt,
+              runtimeInstructions,
+              browserInstructionsDelivered = delivered.browser,
+              deviceInstructionsDelivered = delivered.device,
+            } = resume === "native"
+              ? {
+                  message: "",
+                  prompt: undefined,
+                  runtimeInstructions:
+                    interrupted?.agent === agent.nativeThreadId
+                      ? interrupted.runtimeInstructions
+                      : undefined,
+                }
+              : resume === "replay"
                 ? {
-                    message: "",
-                    prompt: undefined,
-                    runtimeInstructions:
-                      interrupted?.agent === agent.nativeThreadId
-                        ? interrupted.runtimeInstructions
-                        : undefined,
+                    message: dropped!.message,
+                    prompt: dropped!.text,
+                    runtimeInstructions: dropped!.runtimeInstructions,
                   }
-                : resume === "replay"
-                  ? {
-                      message: dropped!.message,
-                      prompt: dropped!.text,
-                      runtimeInstructions: dropped!.runtimeInstructions,
-                    }
-                  : yield* resolveUserMessage(
-                      turnInput,
-                      mcpServers,
-                      hasDeviceTools,
-                      delivered,
-                      dropped?.text,
-                    );
+                : yield* resolveUserMessage(
+                    turnInput,
+                    mcpServers,
+                    hasBrowserTools,
+                    hasDeviceTools,
+                    delivered,
+                    dropped?.text,
+                  );
             const compacted = resume === undefined && prompt === undefined;
             const pendingUpdates: Array<InteractionUpdate> = [];
             let context: ActiveCursorTurn | null = null;
@@ -3031,7 +3052,8 @@ export const makeCursorAdapterV2 = Effect.fn("makeCursorAdapterV2")(function* (
               yield* Ref.set(told, {
                 agent: agent.nativeThreadId,
                 orchestration: !compacted && (delivered.orchestration || mcpServers !== undefined),
-                device: !compacted && hasDeviceTools,
+                browser: !compacted && browserInstructionsDelivered,
+                device: !compacted && deviceInstructionsDelivered,
                 backgroundWait:
                   !compacted && (delivered.backgroundWait || mcpServers !== undefined),
                 runtime: compacted ? undefined : delivered.runtime,
@@ -3542,6 +3564,7 @@ export const makeCursorAdapterV2 = Effect.fn("makeCursorAdapterV2")(function* (
                   Ref.set(told, {
                     agent,
                     orchestration: false,
+                    browser: false,
                     device: false,
                     backgroundWait: false,
                     runtime: undefined,

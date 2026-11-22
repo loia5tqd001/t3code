@@ -416,6 +416,33 @@ describe("MuseAdapterV2", () => {
     }).pipe(Effect.scoped, Effect.provide(testLayer)),
   );
 
+  it.effect("adds Browserthing guidance to Muse turns only while browser access is enabled", () =>
+    Effect.gen(function* () {
+      for (const browserToolsAvailable of [true, false]) {
+        yield* (yield* McpProviderSessions.McpProviderSessions).set({
+          environmentId: EnvironmentId.make("test-environment"),
+          threadId: THREAD_ID,
+          providerSessionId: `browser-access-${browserToolsAvailable}`,
+          providerInstanceId: INSTANCE_ID,
+          endpoint: "http://127.0.0.1:43210/mcp",
+          authorizationHeader: "Bearer thread-scoped-test-token",
+          browserToolsAvailable,
+        });
+        const fake = yield* makeFakeMuse();
+        fake.host.initializeResult.grantedCapabilities.push("sessionMcp");
+        const harness = yield* makeHarness(fake);
+        yield* startConversation(harness, fake);
+        const call = fake.calls.find((entry) => entry.method === "turn/start");
+        const input = call?.params.input as Array<{
+          readonly type: string;
+          readonly text?: string;
+        }>;
+        const runtime = input[0]?.text ?? "";
+        assert.equal(runtime.includes("## Browser control (Browserthing)"), browserToolsAvailable);
+      }
+    }).pipe(Effect.scoped, Effect.provide(testLayer)),
+  );
+
   it.effect("selects the runtime mode's permission profile on native start and resume", () =>
     Effect.gen(function* () {
       for (const [runtimeMode, profile, approvalMode] of [

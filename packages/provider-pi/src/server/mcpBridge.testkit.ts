@@ -3,7 +3,7 @@ import * as NodeCrypto from "node:crypto";
 import * as NodeModule from "node:module";
 import * as NodePath from "node:path";
 import * as NodeVM from "node:vm";
-import { PI_T3_MCP_EXTENSION_SOURCE } from "./mcpExtensionSource.ts";
+import { PI_T3_MCP_EXTENSION_SOURCE, T3_PI_BROWSER_TOOLS_ENV } from "./mcpExtensionSource.ts";
 
 interface RegisteredTool {
   readonly name: string;
@@ -58,6 +58,7 @@ export async function loadMcpBridge(
     readonly result?: unknown;
     readonly toolSearchAvailable?: boolean;
     readonly toolSearchDisabled?: boolean;
+    readonly browserToolsAvailable?: boolean;
     // Pi activates direct and model-only tools when they are registered.
     readonly activatesOnRegistration?: boolean;
     readonly allowsTool?: (name: string) => boolean;
@@ -107,6 +108,7 @@ export async function loadMcpBridge(
         T3_MCP_BEARER_TOKEN: "fixture-token",
         T3_PI_MCP_EXTENSION_PATH: "/fixture/pi-t3-extension.ts",
         T3_PI_RUNTIME_MODE: options.runtimeMode,
+        [T3_PI_BROWSER_TOOLS_ENV]: options.browserToolsAvailable === false ? "0" : "1",
       },
     },
     AbortSignal,

@@ -940,7 +940,7 @@ function assertReinjectedInstructions(
 ) {
   const text = blocks[0]?.text ?? "";
   assert.include(text, "T3 Code interaction mode: Default");
-  assert.include(text, "## T3 Code browser");
+  assert.include(text, "## Browser control (Browserthing)");
   assert.include(text, "T3 Code orchestration");
   assert.include(text, `<user_request>\n${request}\n</user_request>`);
   assert.include(blocks[1]?.text ?? "", "<runtime_info>");
@@ -2583,7 +2583,7 @@ describe("AcpAdapterV2", () => {
           providerInstanceId: instanceId,
           endpoint: "http://127.0.0.1:43123/mcp",
           authorizationHeader: "Bearer instruction-transition-token",
-          browserToolsAvailable: false,
+          browserToolsAvailable: true,
         });
         const adapter = yield* makeAcpAdapterV2({
           instanceId,
@@ -2678,7 +2678,8 @@ describe("AcpAdapterV2", () => {
         const firstDefault = yield* runTurn(2, defaultPolicy, "First default request.");
         assert.equal(firstDefault.textBlockCount, 2);
         assert.include(firstDefault.prompt, "T3 Code interaction mode: Default");
-        assert.include(firstDefault.prompt, "## T3 Code browser");
+        assert.include(firstDefault.prompt, "## Browser control (Browserthing)");
+        assert.notInclude(firstDefault.prompt, "## T3 Code browser");
         assert.include(firstDefault.prompt, "T3 Code orchestration");
         assert.include(firstDefault.prompt, "<runtime_info>");
         assert.notInclude(
@@ -2690,22 +2691,35 @@ describe("AcpAdapterV2", () => {
         assert.equal(secondDefault.prompt, "Second default request.");
         assert.equal(secondDefault.textBlockCount, 1);
 
+        yield* (yield* McpProviderSessions.McpProviderSessions).set({
+          environmentId: EnvironmentId.make("environment-acp-instruction-transitions"),
+          threadId,
+          providerSessionId: "mcp-session-acp-instruction-transitions-disabled",
+          providerInstanceId: instanceId,
+          endpoint: "http://127.0.0.1:43123/mcp",
+          authorizationHeader: "Bearer instruction-transition-token",
+          browserToolsAvailable: false,
+        });
+        const browserDisabled = yield* runTurn(4, defaultPolicy, "Browser access off.");
+        assert.notInclude(browserDisabled.prompt, "## Browser control (Browserthing)");
+        assert.include(browserDisabled.prompt, "T3 Code orchestration");
+
         const planPolicy = policy("plan");
-        const firstPlan = yield* runTurn(4, planPolicy, "Plan this change.");
+        const firstPlan = yield* runTurn(5, planPolicy, "Plan this change.");
         assert.include(firstPlan.prompt, "T3 Code interaction mode: Plan");
         assert.deepEqual(firstPlan.modeSets, [planModeId]);
         assert.include(
-          (yield* runTurn(5, planPolicy, "Continue planning.")).prompt,
+          (yield* runTurn(6, planPolicy, "Continue planning.")).prompt,
           "Continue planning.",
         );
-        const restoredBuild = yield* runTurn(6, defaultPolicy, "Implement the change.");
+        const restoredBuild = yield* runTurn(7, defaultPolicy, "Implement the change.");
         assert.include(restoredBuild.prompt, "T3 Code interaction mode: Default");
         assert.deepEqual(
           restoredBuild.modeSets,
           [buildModeId],
           "Build should restore the native mode that T3 temporarily replaced for Plan",
         );
-        const switchedModel = yield* runTurn(7, defaultPolicy, "Switch models.", {
+        const switchedModel = yield* runTurn(8, defaultPolicy, "Switch models.", {
           instanceId,
           model: "composer-2",
         });

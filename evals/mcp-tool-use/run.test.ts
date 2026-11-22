@@ -208,9 +208,9 @@ it.each([
   ],
   [LOOK, [bash("shot http://localhost:3000/settings/subscription --out /tmp/s.png")], true],
   [LOOK, [bash("uvx shot-scraper http://localhost:3000 -o /tmp/s.png")], true],
-  // World W has no suite, so a spec run is ad hoc there; the unasked-edit guard leaves it alone.
+  // World W has no suite, so a spec run is ad hoc there.
   [LOOK, [bash("pnpm exec playwright test /tmp/qa/checkout.spec.ts")], true],
-  [UNASKED, [bash("npx playwright test")], false],
+  [UNASKED, [bash("npx playwright test")], true],
   // A script the agent wrote is read where a command runs it.
   [LOOK, [write("/tmp/shot.mjs", LAUNCH), bash("node /tmp/shot.mjs")], true],
   [
@@ -243,28 +243,44 @@ it.each([
     [bash(`node -e "console.log(require.resolve('puppeteer'), require.resolve('playwright'))"`)],
     false,
   ],
-  [
-    LOOK,
-    [bash("command -v agent-browser"), bash("agent-browser open http://localhost:3000")],
-    false,
-  ],
+  [LOOK, [bash("agent-browser open http://localhost:3000")], true],
+  [LOOK, [bash("command -v agent-browser")], false],
+  [LOOK, [bash("which agent-browser")], false],
+  [LOOK, [bash("ls node_modules/.bin | grep agent-browser")], false],
   [LOOK, [bash("curl -s http://localhost:3000/settings/subscription")], false],
   [LOOK, [bash(`git commit -m "fix: screenshot spacing"`)], false],
   [LOOK, [bash("pnpm dev:local > /tmp/acme-web-dev.log 2>&1 &")], false],
   [UNASKED, [bash("command -v agent-browser")], false],
   [UNASKED, [bash("agent-browser open http://localhost:3000")], true],
   [UNASKED, [bash("agent-browser --session qa open http://localhost:3000")], true],
+  [UNASKED, [bash("bt sessions")], false],
+  [UNASKED, [bash("bt new checkout http://localhost:3000")], true],
+  [UNASKED, [bash("agent-browser --help")], false],
   // The user's chosen CLI counts with global flags before its subcommand; help doesn't.
   [CHOSE, [bash("cd /tmp && agent-browser --session bal open http://localhost:3000")], false],
-  [CHOSE, [bash("agent-browser --help | grep open")], true],
+  [CHOSE, [bash("agent-browser --help | grep open")], false],
 ] as const)("%s browser shell check: %j fails=%s", (id, calls, fails) => {
   const run = {
     calls: calls.map((call) => ({ step: 0, ...call })),
     text: "",
     stopReason: "end_turn",
   };
-  const { shellMustNot, shellMust } = browserCase(id).expect;
-  assert.equal(failed({ shellMustNot, shellMust }, run).length > 0, fails);
+  const { shellMustNot } = browserCase(id).expect;
+  assert.equal(failed({ shellMustNot }, run).length > 0, fails);
+});
+
+it("accepts a complete Browserthing browser workflow", () => {
+  const run = {
+    calls: [
+      bash("bt sessions"),
+      bash("bt attach checkout"),
+      bash("bt snapshot --session checkout"),
+    ].map((call) => ({ step: 0, ...call })),
+    text: "",
+    stopReason: "end_turn",
+  };
+  const { shellMustNot, shellMust } = browserCase(LOOK).expect;
+  assert.deepEqual(failed({ shellMustNot, shellMust }, run), []);
 });
 
 it("accepts any tool listed as an alternative", () => {
@@ -337,13 +353,16 @@ it("accepts any tool listed as an alternative", () => {
     "maxCalls preview_status|preview_open <= 1",
   ]);
   assert.deepEqual(failed({ maxCalls: { "preview_status|preview_open": 2 } }, both), []);
-  // With browser access off, any second preview-capability call counts, closing a tab included.
+  // With browser access off, every preview-capability call is forbidden, closing a tab included.
   const offTwice: SampleRun = {
     calls: ["preview_open", "t3_preview_close"].map((tool) => ({ step: 0, tool, input: {} })),
     text: "",
     stopReason: "end_turn",
   };
-  assert.lengthOf(failed(browserCase("br-guard-browser-access-off").expect, offTwice), 1);
+  assert.include(
+    failed(browserCase("br-guard-browser-access-off").expect, offTwice),
+    "notCalls preview_open",
+  );
 });
 
 it("counts the new threads an agent asks for, one brief per thread, over both creation tools", () => {
@@ -1717,7 +1736,7 @@ it.effect("saves a pasted value with no card where request_secret takes one", ()
   }).pipe(Effect.provide(FetchHttpClient.layer)),
 );
 
-it.effect("fails preview calls with T3's errors when browser access is off or a mock is one", () =>
+it.effect("fails preview calls with T3's errors when browser access is off", () =>
   Effect.gen(function* () {
     const base = buildBase(template, { model: "claude-sonnet-5-5", keepUserInstructions: false });
     const config = {
@@ -1746,34 +1765,10 @@ it.effect("fails preview calls with T3's errors when browser access is off or a 
         is_error: true,
         content: off,
       });
-    assert.notInclude(t3SystemAppend("claude-sonnet-5-5", true, false), "## T3 Code browser");
-    const unsupported = "br-guard-preview-open-unsupported";
-    assert.deepInclude(yield* answer(unsupported, "preview_open"), {
-      is_error: true,
-      content: "Preview automation client desktop-1 does not support open.",
-    });
-    const status = yield* answer(unsupported, "preview_status");
-    assert.isUndefined(status.is_error);
-    assert.include(String(status.content), '"available":false');
-    // A sequence mock answers each call with its next result, then repeats the last.
-    const flow = makeSample(browserCase("br-flow-qa-missing-cli"), base);
-    flow.tools.push({ name: "mcp__t3-code__preview_snapshot" });
-    const titles: Array<string> = [];
-    for (let i = 0; i < 4; i++) {
-      const result = yield* answerToolCall(flow, config, {
-        type: "tool_use",
-        id: `snapshot-${i}`,
-        name: "mcp__t3-code__preview_snapshot",
-        input: {},
-      });
-      titles.push(String(/"title":"([^"]+)"/.exec(String(result.content))?.[1]));
-    }
-    assert.deepEqual(titles, [
-      "Subscription · Acme",
-      "Top up · Acme",
-      "Acme · Stripe Checkout",
-      "Acme · Stripe Checkout",
-    ]);
+    assert.notInclude(
+      t3SystemAppend("claude-sonnet-5-5", true, false),
+      "## Browser control (Browserthing)",
+    );
   }).pipe(Effect.provide(FetchHttpClient.layer)),
 );
 

@@ -1,6 +1,7 @@
 import { assert, describe, it } from "@effect/vitest";
 
 import {
+  T3_CODE_BROWSERTHING_INSTRUCTIONS,
   T3_CODE_DEVICE_TOOL_INSTRUCTIONS,
   T3_CODE_DEVICE_TOOL_INSTRUCTIONS_WITH_TOOL_SEARCH,
   T3_CODE_ORCHESTRATION_INSTRUCTIONS,
@@ -39,41 +40,91 @@ describe("T3 device instructions", () => {
     );
   });
 
-  it("reach OpenCode and Cursor only when the session holds device access", () => {
-    assert.include(t3OrchestrationSystemPrompt(true, true), T3_CODE_DEVICE_TOOL_INSTRUCTIONS);
-    assert.notInclude(t3OrchestrationSystemPrompt(true, false), "## T3 Code devices");
-    assert.isUndefined(t3OrchestrationSystemPrompt(false, true));
+  it("reach browser-capable sessions and withhold unavailable automation instructions", () => {
+    assert.include(
+      t3OrchestrationSystemPrompt(true, true, false)!,
+      "## Browser control (Browserthing)",
+    );
+    assert.include(
+      t3OrchestrationSystemPrompt(true, true, true)!,
+      T3_CODE_DEVICE_TOOL_INSTRUCTIONS,
+    );
+    assert.notInclude(t3OrchestrationSystemPrompt(true, true, false)!, "## T3 Code devices");
+    assert.notInclude(
+      t3OrchestrationSystemPrompt(true, false, true)!,
+      "## Browser control (Browserthing)",
+    );
+    assert.include(
+      t3OrchestrationSystemPrompt(true, false, true)!,
+      T3_CODE_DEVICE_TOOL_INSTRUCTIONS,
+    );
+    assert.isUndefined(t3OrchestrationSystemPrompt(false, true, true));
 
-    const firstRun = (hasDeviceTools: boolean) =>
+    const firstRun = (hasBrowserTools: boolean, hasDeviceTools: boolean) =>
       t3OrchestrationPrompt({
         prompt: "Check the login screen.",
         hasT3Mcp: true,
+        hasBrowserTools,
         hasDeviceTools,
         orchestrationDelivered: false,
+        browserInstructionsDelivered: false,
         deviceInstructionsDelivered: false,
       });
-    assert.include(firstRun(true), T3_CODE_DEVICE_TOOL_INSTRUCTIONS);
-    assert.notInclude(firstRun(false), "## T3 Code devices");
+    assert.include(firstRun(true, true), T3_CODE_DEVICE_TOOL_INSTRUCTIONS);
+    assert.include(firstRun(true, false), "## Browser control (Browserthing)");
+    assert.notInclude(firstRun(true, false), "## T3 Code devices");
+    assert.notInclude(firstRun(false, false), "## Browser control (Browserthing)");
 
     const laterRun = (deviceInstructionsDelivered: boolean) =>
       t3OrchestrationPrompt({
         prompt: "Check the login screen.",
         hasT3Mcp: true,
+        hasBrowserTools: true,
         hasDeviceTools: true,
         orchestrationDelivered: true,
+        browserInstructionsDelivered: true,
         deviceInstructionsDelivered,
       });
     assert.include(laterRun(false), T3_CODE_DEVICE_TOOL_INSTRUCTIONS);
     assert.notInclude(laterRun(false), T3_CODE_ORCHESTRATION_INSTRUCTIONS.trim());
     assert.equal(laterRun(true), "Check the login screen.");
 
+    const browserRun = (browserInstructionsDelivered: boolean) =>
+      t3OrchestrationPrompt({
+        prompt: "Check the login screen.",
+        hasT3Mcp: true,
+        hasBrowserTools: true,
+        hasDeviceTools: false,
+        orchestrationDelivered: true,
+        browserInstructionsDelivered,
+        deviceInstructionsDelivered: false,
+      });
+    assert.include(browserRun(false), T3_CODE_BROWSERTHING_INSTRUCTIONS.trim());
+    assert.notInclude(browserRun(false), T3_CODE_ORCHESTRATION_INSTRUCTIONS.trim());
+    assert.equal(browserRun(true), "Check the login screen.");
+
+    const combinedRun = t3OrchestrationPrompt({
+      prompt: "Check the login screen.",
+      hasT3Mcp: true,
+      hasBrowserTools: true,
+      hasDeviceTools: true,
+      orchestrationDelivered: true,
+      browserInstructionsDelivered: false,
+      deviceInstructionsDelivered: false,
+    });
+    assert.include(combinedRun, T3_CODE_BROWSERTHING_INSTRUCTIONS.trim());
+    assert.include(combinedRun, T3_CODE_DEVICE_TOOL_INSTRUCTIONS.trim());
+    assert.notInclude(combinedRun, T3_CODE_ORCHESTRATION_INSTRUCTIONS.trim());
+
     // A provider's own guidance reaches a conversation that already had the rest.
     const providerRun = (providerInstructionsDelivered: boolean) =>
       t3OrchestrationPrompt({
         prompt: "Check the login screen.",
         hasT3Mcp: true,
+        hasBrowserTools: false,
         hasDeviceTools: false,
         orchestrationDelivered: true,
+        browserInstructionsDelivered: false,
         deviceInstructionsDelivered: false,
         providerInstructions: "Mark awaited shells.",
         providerInstructionsDelivered,
@@ -84,7 +135,12 @@ describe("T3 device instructions", () => {
   });
 
   it("reach ACP agents again when device access changes mid-thread", () => {
-    const state = { interactionMode: "default", hasT3Mcp: true, hasDeviceTools: false } as const;
+    const state = {
+      interactionMode: "default",
+      hasT3Mcp: true,
+      hasBrowserTools: true,
+      hasDeviceTools: false,
+    } as const;
     const withDevices = t3AcpPromptWithInstructions({
       prompt: "Check the login screen.",
       state: { ...state, hasDeviceTools: true },
@@ -96,5 +152,46 @@ describe("T3 device instructions", () => {
       "Again.",
     );
     assert.notInclude(t3AcpPromptWithInstructions({ prompt: "Hi.", state }), "## T3 Code devices");
+  });
+
+  it("routes ACP browser work to Browserthing", () => {
+    const withoutDevices = {
+      interactionMode: "default",
+      hasT3Mcp: true,
+      hasBrowserTools: true,
+      hasDeviceTools: false,
+    } as const;
+    const first = t3AcpPromptWithInstructions({
+      prompt: "Check the page.",
+      state: withoutDevices,
+    });
+    assert.include(first, T3_CODE_BROWSERTHING_INSTRUCTIONS.trim());
+    assert.notInclude(first, "## T3 Code browser");
+    assert.equal(
+      t3AcpPromptWithInstructions({
+        prompt: "Again.",
+        state: withoutDevices,
+        previousState: withoutDevices,
+      }),
+      "Again.",
+    );
+  });
+
+  it("withholds the Browserthing mandate without browser access", () => {
+    const noBrowser = {
+      interactionMode: "default",
+      hasT3Mcp: true,
+      hasBrowserTools: false,
+      hasDeviceTools: false,
+    } as const;
+    const first = t3AcpPromptWithInstructions({ prompt: "Check the page.", state: noBrowser });
+    assert.notInclude(first, "## Browser control (Browserthing)");
+    assert.include(first, "T3 Code orchestration");
+    const enabled = t3AcpPromptWithInstructions({
+      prompt: "Check the page.",
+      state: { ...noBrowser, hasBrowserTools: true },
+      previousState: noBrowser,
+    });
+    assert.include(enabled, "## Browser control (Browserthing)");
   });
 });

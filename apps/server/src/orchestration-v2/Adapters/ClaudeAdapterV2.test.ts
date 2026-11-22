@@ -879,6 +879,7 @@ describe("ClaudeAdapterV2 native protocol logging", () => {
       cwd: "/workspace",
       allowedTools: overrides.allowedTools ?? [],
       mcpServers: overrides.mcpServers ?? {},
+      browserToolsAvailable: true,
       environment: {},
     });
     assert.isObject(options.systemPrompt);
@@ -891,6 +892,8 @@ describe("ClaudeAdapterV2 native protocol logging", () => {
     assert.equal(systemPrompt.preset, "claude_code");
     assert.include(systemPrompt.append ?? "", "Use `delegate_task`");
     assert.include(systemPrompt.append ?? "", "call `t3_background_wait`");
+    assert.include(systemPrompt.append ?? "", "## Browser control (Browserthing)");
+    assert.notInclude(systemPrompt.append ?? "", "## T3 Code browser");
     assert.notInclude(systemPrompt.append ?? "", "## T3 Code devices");
     const logged = ClaudeAdapterV2.loggedClaudeQueryOptions(options);
     assert.equal(logged.hasMcpServers, true);
@@ -912,7 +915,11 @@ describe("ClaudeAdapterV2 native protocol logging", () => {
 });
 
 describe("ClaudeAdapterV2 device instructions", () => {
-  const options = (input: { readonly mcp: boolean; readonly deviceToolsAvailable: boolean }) =>
+  const options = (input: {
+    readonly mcp: boolean;
+    readonly browserToolsAvailable?: boolean;
+    readonly deviceToolsAvailable: boolean;
+  }) =>
     ClaudeAdapterV2.makeClaudeQueryOptions({
       modelSelection: {
         instanceId: ProviderInstanceId.make("claudeAgent"),
@@ -924,11 +931,17 @@ describe("ClaudeAdapterV2 device instructions", () => {
       ...(input.mcp
         ? { mcpServers: { "t3-code": { type: "http" as const, url: "http://127.0.0.1/mcp" } } }
         : {}),
+      ...(input.browserToolsAvailable === undefined
+        ? {}
+        : { browserToolsAvailable: input.browserToolsAvailable }),
       deviceToolsAvailable: input.deviceToolsAvailable,
       environment: {},
     });
-  const append = (input: { readonly mcp: boolean; readonly deviceToolsAvailable: boolean }) =>
-    (options(input).systemPrompt as { readonly append?: string }).append ?? "";
+  const append = (input: {
+    readonly mcp: boolean;
+    readonly browserToolsAvailable?: boolean;
+    readonly deviceToolsAvailable: boolean;
+  }) => (options(input).systemPrompt as { readonly append?: string }).append ?? "";
 
   it("gives a session with device access the device block and the ToolSearch line to load it", () => {
     const text = append({ mcp: true, deviceToolsAvailable: true });
@@ -939,6 +952,25 @@ describe("ClaudeAdapterV2 device instructions", () => {
   it("leaves the device block out without device access or without T3 tools", () => {
     assert.notInclude(append({ mcp: true, deviceToolsAvailable: false }), "## T3 Code devices");
     assert.notInclude(append({ mcp: false, deviceToolsAvailable: true }), "## T3 Code devices");
+  });
+
+  it("leaves Browserthing guidance out without browser access or without T3 tools", () => {
+    assert.include(
+      append({ mcp: true, browserToolsAvailable: true, deviceToolsAvailable: false }),
+      "## Browser control (Browserthing)",
+    );
+    assert.notInclude(
+      append({ mcp: true, browserToolsAvailable: false, deviceToolsAvailable: false }),
+      "## Browser control (Browserthing)",
+    );
+    assert.notInclude(
+      append({ mcp: false, browserToolsAvailable: true, deviceToolsAvailable: false }),
+      "## Browser control (Browserthing)",
+    );
+    assert.notInclude(
+      append({ mcp: true, deviceToolsAvailable: false }),
+      "## Browser control (Browserthing)",
+    );
   });
 
   it("gives native subagents the device block only in a session with device access", async () => {

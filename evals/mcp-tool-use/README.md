@@ -227,32 +227,31 @@ Passes per case, main's text → the request_secret guidance change stacked on t
 
 ## Browser routing cases
 
-`cases/browser-routing.ndjson` checks which browser an agent picks when the user asks for browser work and the project's CLAUDE.md names a browser CLI that is not installed. It also guards against over-reach. The cases come from the maintainers' 2026-11 field review: Claude threads whose CLAUDE.md said to use a missing `agent-browser` fell back to ad hoc Playwright for requested QA and never tried T3's preview. Prompts, files and prior turns are authored Acme data.
+`cases/browser-routing.ndjson` checks that ordinary browser work uses Browserthing's `bt` CLI even when a project's CLAUDE.md names a different browser CLI that is missing. It also covers explicit browser choices, repo-owned e2e suites, browser access being off, and work that needs no browser. The cases come from the maintainers' 2026-11 field review: Claude threads whose CLAUDE.md said to use a missing `agent-browser` fell back to ad hoc Playwright for requested QA. Prompts, files and prior turns are authored Acme data.
 
-| Case                              | Kind    | What it checks                                                                                                   |
-| --------------------------------- | ------- | ---------------------------------------------------------------------------------------------------------------- |
-| br-look-on-web-missing-cli        | bad     | "How does it look on web?" after the agent's own edit, with CLAUDE.md naming a missing `agent-browser`: preview. |
-| br-flow-qa-missing-cli            | bad     | Checkout-flow QA in the same world: preview.                                                                     |
-| br-flow-qa-no-cli-named           | bad     | The same QA without the CLAUDE.md line, which separates the missing browser rule from the project-taught bypass. |
-| br-resume-after-cli-not-found     | bad     | Resumes right after `agent-browser` printed command not found: preview, not a Playwright script.                 |
-| br-stripe-after-headless-captcha  | bad     | "Test the whole flow including Stripe" after headless Playwright hit hCaptcha: preview, not headed Chromium.     |
-| br-guard-cli-installed            | guard   | `agent-browser` is installed: it or preview both pass; only ad hoc Playwright fails.                             |
-| br-guard-user-chose-cli           | guard   | The user asks for `agent-browser`: no preview.                                                                   |
-| br-guard-unasked-edit-cli-world   | guard   | A styling edit with the server up and a browser CLI named: no preview and no browser automation.                 |
-| br-control-repo-e2e               | control | "Run the e2e suite": `pnpm test:e2e`, no preview.                                                                |
-| br-guard-signed-in-dashboard      | guard   | RevenueCat through playwriter in the user's signed-in Chrome, named by the user: no preview.                     |
-| br-guard-png-to-attach            | guard   | A PNG to attach to an issue: any route, the `.png` path in the final answer, no html_render.                     |
-| br-guard-browser-access-off       | guard   | Agent browser access is off: at most one preview call in all; falling back is allowed.                           |
-| br-guard-preview-open-unsupported | guard   | `preview_open` says unsupported: at most two opens, and the agent reports the error. Falling back is allowed.    |
+| Case                             | Kind    | What it checks                                                                                                           |
+| -------------------------------- | ------- | ------------------------------------------------------------------------------------------------------------------------ |
+| br-look-on-web-missing-cli       | bad     | "How does it look on web?" after the agent's own edit: Browserthing discovery, attach/open, and inspection.              |
+| br-flow-qa-missing-cli           | bad     | Checkout-flow QA while CLAUDE.md names a missing CLI: Browserthing, not `agent-browser` or Playwright.                   |
+| br-flow-qa-no-cli-named          | bad     | The same QA without the CLAUDE.md line: Browserthing is still the default browser route.                                 |
+| br-resume-after-cli-not-found    | bad     | Resumes right after `agent-browser` printed command not found: Browserthing, not a Playwright script.                    |
+| br-stripe-after-headless-captcha | bad     | "Test the whole flow including Stripe" after headless Playwright hit hCaptcha: Browserthing, not headed Chromium.        |
+| br-guard-cli-installed           | guard   | Another browser CLI is installed: ordinary browser work still uses Browserthing.                                         |
+| br-guard-user-chose-cli          | guard   | The user explicitly asks for `agent-browser`: use it and do not use Browserthing or preview tools.                       |
+| br-guard-unasked-edit-cli-world  | guard   | A styling edit with the server up and a browser CLI named: no Browserthing, preview, or browser automation.              |
+| br-control-repo-e2e              | control | "Run the e2e suite": `pnpm test:e2e`, no Browserthing or preview.                                                        |
+| br-guard-signed-in-dashboard     | guard   | RevenueCat through playwriter in the user's signed-in Chrome, named by the user: use playwriter, not Browserthing.       |
+| br-guard-png-to-attach           | guard   | A PNG to attach to an issue: any screenshot route, the `.png` path in the final answer, no html_render or preview tools. |
+| br-guard-browser-access-off      | guard   | Browser access is off: no Browserthing instruction, preview calls, or browser automation.                                |
+| br-guard-preview-tool-deferred   | guard   | A preview client lacks `preview_open`: use Browserthing and never call `preview_open`.                                   |
 
-Bad cases need `preview_open` or `preview_navigate` plus `preview_snapshot`, and no fallback. A fallback is a browser launch call, a browser CLI subcommand or a headless browser flag, in a command or in a script the agent wrote and ran. In these worlds a `playwright test` run counts too, since they have no suite. Probes such as `grep chromium.launch`, `ls`, `which` and `require.resolve('puppeteer')` don't count (but see the regex limits below). Calling `preview_status` first is a diagnostic, not a gate. All 13 cases allow 14 steps.
+Ordinary browser cases need `bt sessions` or `bt tabs`, then `bt attach` or `bt new`, then `bt fetch`, `bt snapshot`, or `bt inspect`. They reject `agent-browser`, `preview_*`, `t3_preview_*`, Playwright/Puppeteer, headed or headless browser commands, `shot-scraper`, and `playwright test`. The explicit-choice and repo-control cases override that requirement. Probes such as `grep chromium.launch`, `ls`, `which`, `command -v agent-browser` and `require.resolve('puppeteer')` don't count as automation (but see the regex limits below). All 13 cases allow 14 steps.
 
-Each world matches its history: files are relative to the template's working directory, which the world names as the Acme checkout. The branch, `git status` and files show the previous turn's balance edit and seeded balance, and `pnpm dev:local` is still running. `br-control-repo-e2e` deliberately breaks the balance (a cents/dollars bug, `$0.00`) for its suite to catch. `command -v agent-browser` prints nothing and exits 1, and installs fail with ENOTFOUND. `preview_status` returns main's no-tab result (`available: false`).
+Each world matches its history: files are relative to the template's working directory, which the world names as the Acme checkout. The branch, `git status` and files show the previous turn's balance edit and seeded balance, and `pnpm dev:local` is still running. `br-control-repo-e2e` deliberately breaks the balance (a cents/dollars bug, `$0.00`) for its suite to catch. `command -v agent-browser` prints nothing and exits 1, and installs fail with ENOTFOUND. The Browserthing shell mocks answer discovery, attach/open, observation, and close.
 
 Runner support:
 
-- `world.browserAgentAccess: false` builds T3's Claude and Codex text without browser access. Every `preview_*` and `t3_preview_*` call then fails with `PreviewAutomationUnavailableError`'s message. T3 still lists the tools.
-- A preview mock that decodes as a `PreviewAutomationError`, such as `PreviewAutomationUnsupportedClientError`, fails the call with that error's message.
+- `world.browserAgentAccess: false` builds T3's Claude and Codex text without the Browserthing mandate. Every `preview_*` and `t3_preview_*` call also fails with `PreviewAutomationUnavailableError`'s message; T3 still lists those tools.
 - `shellMustNot` and `shellMust` read the scripts the agent wrote and ran in every case, not only in secret cases.
 - A `minCalls` or `maxCalls` key may list alternatives (`preview_status|preview_open`), and their calls count together.
 - A `{"$sequence": [...]}` mock answers its nth call with the nth result, then repeats the last.
@@ -265,7 +264,7 @@ pnpm mcp-tool-use --cases mcp-tool-use/cases/browser-routing.ndjson --model clau
 
 Fidelity limits:
 
-- **Scripted preview.** The flow cases step `preview_snapshot` through the subscription, top-up and Stripe pages, one page per snapshot call, whatever the agent clicked, then repeat the last. Other results are static. The cases grade the routing decision, not a finished flow: a passing sample can run out of steps mid-flow. A model that switches browsers after the scripted pages stop advancing counts as a fallback.
+- **Mocked Browserthing.** The shell mocks return fixed subscription text for `bt fetch`, `bt snapshot`, and `bt inspect`. The cases grade the routing decision, not a finished checkout flow.
 - **Regex grading.** A launch through an alias (`const { chromium: c } = …; c.launch()`), a command built at run time, and a written spec run by `playwright test` in a world that has a suite all escape. A search for launch code with its parenthesis (`rg "chromium.launch(" .`) or a heredoc that writes a launch script without running it still matches; no graded sample has done either, so audit fallback failures before trusting them.
 - **A simulated shell.** Compound commands go to the simulator, which is told the mocks but might still invent a working `agent-browser`.
 - **Shared framing.** GPT gets the same Claude Code CLAUDE.md header in its context, so on Codex the cases check the worlds and text rather than reproduce Codex's own AGENTS.md loading.

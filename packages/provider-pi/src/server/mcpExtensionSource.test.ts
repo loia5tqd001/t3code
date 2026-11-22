@@ -95,6 +95,23 @@ describe("Pi orchestration prompt section", () => {
     assert.include(sections.t3_code_orchestration, "orchestrator_capabilities");
     assert.include(sections.t3_code_orchestration, PULL_REQUEST_LINKING_INSTRUCTIONS);
   });
+
+  it("adds Browserthing guidance only while browser access is enabled", async () => {
+    const enabled = await loadMcpBridge({ browserToolsAvailable: true });
+    const enabledResult = await enabled.handlers.get("before_agent_start")!(
+      { systemPrompt: "base" },
+      { ui: { notify: assert.fail } },
+    );
+    assert.include(enabledResult?.systemPrompt ?? "", "## Browser control (Browserthing)");
+
+    const disabled = await loadMcpBridge({ browserToolsAvailable: false });
+    const disabledResult = await disabled.handlers.get("before_agent_start")!(
+      { systemPrompt: "base" },
+      { ui: { notify: assert.fail } },
+    );
+    assert.notInclude(disabledResult?.systemPrompt ?? "", "## Browser control (Browserthing)");
+    assert.include(disabledResult?.systemPrompt ?? "", "orchestrator_capabilities");
+  });
 });
 
 describe("Pi project trust", () => {

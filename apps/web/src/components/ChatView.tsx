@@ -143,7 +143,6 @@ import { BackgroundThreadContext } from "./chat/backgroundThread";
 import { WorkspaceMutationIdContext } from "./chat/ChatMarkdownMedia";
 import { useLocation, useNavigate } from "@tanstack/react-router";
 import {
-  assistantCitationHash,
   assistantCitationFromLocation,
   useSideChatCitationReveal,
 } from "../lib/assistantCitationNavigation";
@@ -310,6 +309,7 @@ import type { AssistantCitationRequest } from "./chat/AssistantCitationSource";
 import { useCitedHistory } from "./chat/citationProcedure";
 import type { MessagesTimelineHistoryControls } from "./chat/MessagesTimeline";
 import { ThreadTimeline } from "./chat/ThreadTimeline";
+import { readSavedMessageNavigation } from "./chat/savedMessageNavigation.logic";
 import { NativeChildWorkDialog } from "./chat/NativeChildWorkDialog";
 import { ProviderSubagentBar } from "./chat/ProviderSubagentBar";
 import { getTriggerDisplayModelName } from "./chat/providerIconUtils";
@@ -500,20 +500,8 @@ export default function ChatView(props: ChatViewProps) {
     void navigate({
       to: "/$environmentId/$threadId",
       params: { environmentId, threadId: message.threadId },
-      hash: assistantCitationHash({
-        version: 1,
-        environmentId,
-        threadId: message.threadId,
-        messageId: message.messageId,
-        text: message.text || " ",
-        start: 0,
-        end: Math.max(1, message.text.length),
-        prefix: "",
-        suffix: "",
-      }),
       state: {
-        assistantCitationActivation: randomUUID(),
-        savedMessageExpectedRole: message.role,
+        savedMessageNavigation: { messageId: message.messageId, requestId: randomUUID() },
       },
       resetScroll: false,
     });
@@ -664,8 +652,8 @@ export default function ChatView(props: ChatViewProps) {
   const citationKey = useLocation({
     select: (location) => location.state.assistantCitationActivation ?? location.state.__TSR_key,
   });
-  const savedMessageExpectedRole = useLocation({
-    select: (location) => location.state.savedMessageExpectedRole,
+  const savedMessageNavigation = useLocation({
+    select: (location) => readSavedMessageNavigation(location.state),
   });
   const citationLocation = { href: citationHref, key: citationKey };
   const locationCitation = assistantCitationFromLocation(citationLocation.href);
@@ -674,11 +662,7 @@ export default function ChatView(props: ChatViewProps) {
     locationCitation &&
     locationCitation.environmentId === environmentId &&
     locationCitation.threadId === threadId
-      ? {
-          citation: locationCitation,
-          key: citationActivation,
-          ...(savedMessageExpectedRole ? { expectedRole: savedMessageExpectedRole } : {}),
-        }
+      ? { citation: locationCitation, key: citationActivation }
       : null
   ) as AssistantCitationRequest | null;
   useSideChatCitationReveal(embedded ? null : routeThreadRef, locationCitation, citationActivation);
@@ -2280,6 +2264,7 @@ export default function ChatView(props: ChatViewProps) {
     onTimelineFooterGrowStable,
     onIsAtEndChangeStable,
     anchorNewTurn,
+    anchorSavedMessage,
     attachTimelineViewport,
     attachComposerOverlay: attachFollowComposerOverlay,
   } = useTimelineFollow({
@@ -2296,6 +2281,11 @@ export default function ChatView(props: ChatViewProps) {
     timelineAnchorMessageId,
     setTimelineAnchor,
   });
+  // oxlint-disable-next-line t3code/no-unreasoned-state-sync -- consumes one router activation and scrolls the mounted timeline to the saved message's source row
+  useEffect(() => {
+    if (savedMessageNavigation === null || activeThreadKey === null) return;
+    anchorSavedMessage(activeThreadKey, savedMessageNavigation.messageId);
+  }, [activeThreadKey, anchorSavedMessage, savedMessageNavigation]);
 
   useFocusComposerOnThreadOpen(
     activeThreadRef,

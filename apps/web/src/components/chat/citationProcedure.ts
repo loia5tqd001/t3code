@@ -24,7 +24,7 @@ export type CitationPhase =
   | { readonly _tag: "failed" };
 
 export interface CitedThreadSnapshot {
-  readonly message: "assistant" | "user" | "other" | null;
+  readonly message: "assistant" | "other" | null;
   readonly hasMoreHistory: boolean;
   readonly loadFailed?: true;
 }
@@ -66,17 +66,16 @@ export async function loadCitedHistory(input: {
   readonly signal: AbortSignal;
   readonly readThread: () => Promise<CitedThreadSnapshot | null>;
   readonly loadThrough: () => Promise<HistoryPageResult>;
-  readonly expectedRole?: "assistant" | "user";
 }): Promise<CitedHistoryOutcome> {
   for (let attempts = 0; ; attempts += 1) {
     const thread = await input.readThread();
     if (thread === null || input.signal.aborted) return { _tag: "aborted" };
     if (thread.loadFailed) return COULD_NOT_LOAD;
-    if (thread.message === (input.expectedRole ?? "assistant")) return { _tag: "found" };
+    if (thread.message === "assistant") return { _tag: "found" };
     if (thread.message === "other") {
       return {
         _tag: "failed",
-        title: msg("The citation does not refer to the expected message"),
+        title: msg("The citation does not refer to an assistant response"),
         description: msg("The selected text is still saved in your citation."),
       };
     }
@@ -97,7 +96,6 @@ export function resolveCitationPhase(input: {
   readonly messageId: string;
   readonly entries: ReadonlyArray<TimelineEntry>;
   readonly rows: ReadonlyArray<MessagesTimelineRow>;
-  readonly expectedRole?: "assistant" | "user";
 }): CitationPhase {
   if (input.history._tag === "failed") return { _tag: "failed" };
   const source = input.entries.find(
@@ -107,8 +105,7 @@ export function resolveCitationPhase(input: {
   );
   // The history store can hold the message a render before the entries do.
   if (!source) return { _tag: "loading" };
-  if (source.kind === "message" && source.message.role !== (input.expectedRole ?? "assistant"))
-    return { _tag: "failed" };
+  if (source.kind === "message" && source.message.role !== "assistant") return { _tag: "failed" };
   const row = input.rows.find(
     (candidate) =>
       (candidate.kind === "message" && candidate.message.id === input.messageId) ||
@@ -150,14 +147,7 @@ export function citedThreadSnapshot(input: {
         sentMessageFromToolItem(item) !== undefined),
   )?.item;
   return {
-    message:
-      item === undefined
-        ? null
-        : item.type === "user_message" || item.type === "assistant_message"
-          ? item.type === "user_message"
-            ? "user"
-            : "assistant"
-          : "other",
+    message: item === undefined ? null : item.type === "user_message" ? "other" : "assistant",
     hasMoreHistory: input.history.hasMoreHistory,
   };
 }
@@ -167,7 +157,6 @@ interface CitedHistoryKey {
   readonly environmentId: AssistantCitationRequest["citation"]["environmentId"];
   readonly threadId: AssistantCitationRequest["citation"]["threadId"];
   readonly messageId: AssistantCitationRequest["citation"]["messageId"];
-  readonly expectedRole?: "assistant" | "user";
 }
 
 function waitForSettledThread(
@@ -202,7 +191,7 @@ function waitForSettledThread(
  * Plain-object keys compare structurally, so one activation is one procedure.
  */
 const citedHistoryAtom = Atom.family(
-  ({ key, environmentId, threadId, messageId, expectedRole = "assistant" }: CitedHistoryKey) => {
+  ({ key, environmentId, threadId, messageId }: CitedHistoryKey) => {
     const ref = { environmentId, threadId };
     const threadAtom = environmentThreadDetails.quietThreadAtom(ref);
     const historyAtom = environmentThreadDetails.historyAtom(ref);
@@ -234,7 +223,6 @@ const citedHistoryAtom = Atom.family(
             ? result.value
             : { _tag: "error", message: HISTORY_LOAD_ERROR };
         },
-        expectedRole,
       }).then((outcome) => {
         if (outcome._tag === "aborted") return;
         if (outcome._tag === "failed") {
@@ -262,7 +250,6 @@ export function useCitedHistory(request: AssistantCitationRequest | null): Cited
           environmentId: request.citation.environmentId,
           threadId: request.citation.threadId,
           messageId: request.citation.messageId,
-          ...(request.expectedRole ? { expectedRole: request.expectedRole } : {}),
         }),
   );
 }

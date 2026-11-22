@@ -1,10 +1,8 @@
 import type { OrchestrationV2SavedMessage } from "@t3tools/contracts";
 import { useAtomValue } from "@effect/atom-react";
-import { scopeThreadRef } from "@t3tools/client-runtime/environment";
 import { useNavigate } from "@tanstack/react-router";
 import { BookmarkIcon } from "lucide-react";
 import { T, useGT } from "gt-react";
-import { assistantCitationHash } from "../../lib/assistantCitationNavigation";
 import { randomUUID } from "../../lib/utils";
 import { environmentPresentations } from "../../state/presentation";
 import { savedMessages } from "../../state/orchestration";
@@ -43,7 +41,6 @@ function SavedMessagesEnvironmentGroup({
               <SavedMessagePreview
                 message={message}
                 threadTitle={message.threadTitle}
-                threadRef={scopeThreadRef(environmentId, message.threadId)}
                 onOpen={() => onOpen(message)}
                 onUnsave={() => {
                   if (canSave) onUnsave(message);
@@ -115,20 +112,8 @@ export function SavedMessagesPanel() {
     void navigate({
       to: "/$environmentId/$threadId",
       params: { environmentId, threadId: message.threadId },
-      hash: assistantCitationHash({
-        version: 1,
-        environmentId,
-        threadId: message.threadId,
-        messageId: message.messageId,
-        text: message.text || " ",
-        start: 0,
-        end: Math.max(1, message.text.length),
-        prefix: "",
-        suffix: "",
-      }),
       state: {
-        assistantCitationActivation: randomUUID(),
-        savedMessageExpectedRole: message.role,
+        savedMessageNavigation: { messageId: message.messageId, requestId: randomUUID() },
       },
       resetScroll: false,
     });

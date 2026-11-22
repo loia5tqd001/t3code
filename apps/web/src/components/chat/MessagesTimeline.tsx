@@ -871,7 +871,6 @@ const ConversationTimeline = memo(function ConversationTimeline({
           messageId: citationRequest.citation.messageId,
           entries: timelineEntries,
           rows,
-          ...(citationRequest.expectedRole ? { expectedRole: citationRequest.expectedRole } : {}),
         })
       : null,
     viewport: timelineViewportElement,
@@ -929,7 +928,7 @@ const ConversationTimeline = memo(function ConversationTimeline({
   const anchoredEndSpaceConfig = resolveChatListAnchoredEndSpace(
     rows,
     anchorMessageId,
-    (row) => (row.kind === "message" && row.message.role === "user" ? row.message.id : null),
+    (row) => (row.kind === "message" ? row.message.id : null),
     { anchorOffset: CHAT_TIMELINE_ANCHOR_OFFSET },
   );
   const anchoredEndSpace = anchoredEndSpaceConfig

@@ -522,6 +522,14 @@ export function useTimelineFollow(input: TimelineFollowInput) {
     timelineLiveFollowEnabled,
   ]);
 
+  /** Scrolls a saved message's source row near the top, then keeps its geometry stable. */
+  const anchorSavedMessage = (threadKey: string, messageId: MessageId) => {
+    followStore.dispatch(visit, { type: "followEnd" });
+    visitScroll().showScrollDebouncer.cancel();
+    setShowScrollToBottom(false);
+    setTimelineAnchor({ threadKey, messageId });
+  };
+
   /** Arms the anchor for a message the user just sent, before its run exists. */
   const anchorNewTurn = (threadKey: string, messageId: MessageId) => {
     followStore.dispatch(visit, { type: "followEnd" });
@@ -542,6 +550,7 @@ export function useTimelineFollow(input: TimelineFollowInput) {
     onTimelineFooterGrowStable,
     onIsAtEndChangeStable,
     anchorNewTurn,
+    anchorSavedMessage,
     attachTimelineViewport,
     attachComposerOverlay: followStore.attachComposerOverlay,
   };

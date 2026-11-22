@@ -1,5 +1,5 @@
 import { T, useGT } from "gt-react";
-import { BookmarkIcon, Trash2Icon } from "lucide-react";
+import { ArrowUpRightIcon, Trash2Icon } from "lucide-react";
 
 import { cn } from "../../lib/utils";
 import { Button } from "../ui/button";
@@ -23,7 +23,6 @@ export function SavedMessagePreview({
   return (
     <div className="group/saved-message min-w-0 px-2.5 py-2.5">
       <div className="flex min-w-0 items-start gap-2">
-        <BookmarkIcon className="mt-0.5 size-3 shrink-0 text-primary" aria-hidden />
         <div className="min-w-0 flex-1">
           <button
             type="button"
@@ -38,11 +37,32 @@ export function SavedMessagePreview({
           <div className="mt-1 flex min-w-0 items-center gap-2 text-2xs text-muted-foreground">
             <span className="shrink-0">{message.role === "user" ? gt("You") : gt("T3 Code")}</span>
             {threadTitle ? <span className="truncate">{threadTitle}</span> : null}
-            {savedMessageHasMoreText(message) ? <span className="shrink-0">·</span> : null}
-            {savedMessageHasMoreText(message) ? <span className="shrink-0"><T>Shortened</T></span> : null}
+            {savedMessageHasMoreText(message) ? (
+              <span className="shrink-0">
+                <T>Shortened</T>
+              </span>
+            ) : null}
           </div>
         </div>
         <div className="flex shrink-0 items-center gap-0.5 opacity-0 transition-opacity group-hover/saved-message:opacity-100 focus-within:opacity-100 pointer-coarse:opacity-100">
+          <Tooltip>
+            <TooltipTrigger
+              render={
+                <Button
+                  type="button"
+                  size="icon-micro"
+                  variant="ghost-muted"
+                  aria-label={gt("Open saved message")}
+                  onClick={onOpen}
+                />
+              }
+            >
+              <ArrowUpRightIcon />
+            </TooltipTrigger>
+            <TooltipPopup>
+              <T>Open message</T>
+            </TooltipPopup>
+          </Tooltip>
           <Tooltip>
             <TooltipTrigger
               render={

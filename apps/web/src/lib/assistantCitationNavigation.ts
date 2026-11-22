@@ -2,6 +2,7 @@ import { scopeThreadRef } from "@t3tools/client-runtime/environment";
 import { pipe } from "effect/Function";
 import type {
   AssistantCitation,
+  MessageId,
   OrchestrationV2ThreadShell,
   ScopedThreadRef,
   ThreadId,
@@ -22,14 +23,17 @@ import { randomUUID } from "./utils";
 declare module "@tanstack/react-router" {
   interface HistoryState {
     assistantCitationActivation?: string;
-    savedMessageExpectedRole?: "assistant" | "user";
+    savedMessageNavigation?: {
+      readonly messageId: MessageId;
+      readonly requestId: string;
+    };
   }
 }
 
 const CITATION_HASH_PREFIX = "assistant-citation=";
 
 /** Base64url keeps router hash normalization from decoding quote whitespace or source IDs. */
-export function assistantCitationHash(citation: AssistantCitation) {
+function assistantCitationHash(citation: AssistantCitation) {
   return `${CITATION_HASH_PREFIX}${Base64Url.encode(formatAssistantCitationHref(citation))}`;
 }
 

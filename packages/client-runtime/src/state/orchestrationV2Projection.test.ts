@@ -107,6 +107,37 @@ const emptyProjection = {
 } as OrchestrationV2ThreadProjection;
 
 describe("applyOrchestrationV2ProjectionEvent", () => {
+  it("applies saved-message updates without changing the thread activity timestamp", () => {
+    const messageId = MessageId.make("saved-message");
+    const message = {
+      id: messageId,
+      threadId,
+      runId: null,
+      nodeId: null,
+      role: "assistant" as const,
+      text: "Keep this",
+      attachments: [],
+      streaming: false,
+      createdBy: "agent" as const,
+      creationSource: "server" as const,
+      createdAt: now,
+      updatedAt: now,
+    };
+    const savedAt = DateTime.makeUnsafe("2026-06-20T01:00:00.000Z");
+    const next = applyOrchestrationV2ProjectionEvent(
+      { ...emptyProjection, messages: [message] },
+      {
+        id: "saved-message" as OrchestrationV2DomainEvent["id"],
+        type: "message.saved",
+        threadId,
+        occurredAt: savedAt,
+        payload: { ...message, savedAt },
+      },
+    );
+    expect(next?.messages[0]?.savedAt).toEqual(savedAt);
+    expect(next?.updatedAt).toEqual(now);
+  });
+
   it("applies a compact PR sync without replacing other links or thread metadata", () => {
     const link = (number: number): ThreadPullRequestLink => ({
       host: "github.com",

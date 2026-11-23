@@ -32,6 +32,7 @@
     "check:changed": "node scripts/check-changed.ts",
     "check:changed:fork": "node scripts/check-changed.ts --web-desktop",
     "report:renders": "node scripts/render-metrics.ts",
+    "report:server": "node scripts/server-metrics.ts",
     "lint": "vp lint --report-unused-disable-directives",
     "i18n:untranslated": "node scripts/i18n-untranslated.ts",
     "knip": "knip --preprocessor ./scripts/knip-schemas.ts",

@@ -10,6 +10,7 @@
 //   vp run check:changed                  compare against the closest merge base with any remote main
 //   vp run check:changed <ref>            compare against the merge base with <ref>
 //   vp run check:changed --concurrency 1  run the steps one at a time
+//   vp run check:changed --web-desktop    exclude mobile and marketing packages
 //
 // Uncommitted and untracked files count. Affected packages come from
 // .github/scripts/ci-changes.cjs, the same mapping CI uses to gate its jobs.
@@ -232,6 +233,14 @@ export const splitTests = (tests: Iterable<string>) => {
     nodeTests: all.filter((file) => NODE_TEST.test(file)),
   };
 };
+
+export const withoutForkExcludedPackages = (
+  affected: ReadonlyArray<string>,
+  webDesktopOnly: boolean,
+) =>
+  webDesktopOnly
+    ? affected.filter((name) => name !== "@t3tools/mobile" && name !== "@t3tools/marketing")
+    : affected;
 const escapeRegExp = (text: string) => text.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
 
 // A flag wins over its environment variable; either must be a positive integer.
@@ -259,6 +268,7 @@ const checkChanged = Effect.fn("checkChanged")(function* (input: {
   readonly ref: Option.Option<string>;
   readonly concurrency: Option.Option<number>;
   readonly timeout: Option.Option<number>;
+  readonly webDesktopOnly: boolean;
 }) {
   const fs = yield* FileSystem.FileSystem;
   const path = yield* Path.Path;
@@ -280,6 +290,10 @@ const checkChanged = Effect.fn("checkChanged")(function* (input: {
   const timeoutSeconds = Option.getOrElse(
     yield* override("timeout", input.timeout, "CHECK_CHANGED_TIMEOUT"),
     () => 900,
+  );
+  const npmRegistry = Option.getOrElse(
+    yield* Config.option(Config.String("npm_config_registry")),
+    () => "",
   );
 
   const lines = (...args: Array<string>) => gitLines(root, args);
@@ -303,7 +317,7 @@ const checkChanged = Effect.fn("checkChanged")(function* (input: {
   const inputKey = Effect.gen(function* () {
     const hash = NodeCrypto.createHash("sha256");
     // CI changes test behavior (vite.config.ts rejects .only under CI).
-    hash.update(`${process.version}\0${base}\0${ci}\0`);
+    hash.update(`${process.version}\0${base}\0${ci}\0${input.webDesktopOnly}\0`);
     hash.update(
       yield* git(root, [
         "diff",
@@ -349,7 +363,8 @@ const checkChanged = Effect.fn("checkChanged")(function* (input: {
   const present = yield* Effect.filter(files, (file) => fs.exists(inRoot(file)));
   const code = present.filter((file) => CODE.test(file));
   const packages = readWorkspace();
-  const { affected, outputs } = decide(files, packages, false);
+  const { affected: allAffected, outputs } = decide(files, packages, false);
+  const affected = withoutForkExcludedPackages(allAffected, input.webDesktopOnly);
 
   // Changed test files, and the test files beside a changed source file
   // (foo.ts -> foo.test.ts, foo.browser.test.tsx). Vitest's import-graph
@@ -359,6 +374,7 @@ const checkChanged = Effect.fn("checkChanged")(function* (input: {
   for (const file of code) {
     const dir = path.dirname(file);
     const prefix = `${path.basename(file).replace(CODE, "")}.`;
+    if (!(yield* fs.exists(inRoot(dir)))) continue;
     for (const entry of yield* fs.readDirectory(inRoot(dir))) {
       if (entry.startsWith(prefix) && TEST.test(entry)) tests.add(path.join(dir, entry));
     }
@@ -391,15 +407,21 @@ const checkChanged = Effect.fn("checkChanged")(function* (input: {
       // The Metro, cache, and stale-allowlist cases check more than one file, deletions included.
       always: ["^(?!.*compiles )"],
     },
-  ].flatMap(({ test, root: appRoot, name, compiled, always }) => {
-    const changed = files.filter((file) => file.startsWith(appRoot) && compiled(file));
-    if (changed.length === 0 || tests.has(test)) return [];
-    const names = changed
-      .filter((file) => present.includes(file))
-      .map((file) => `compiles ${escapeRegExp(name(file))}$`);
-    const pattern = [...names, ...always];
-    return pattern.length > 0 ? [{ test, names, pattern }] : [];
-  });
+  ]
+    .filter(
+      ({ test }) =>
+        !input.webDesktopOnly ||
+        (!test.startsWith("apps/mobile/") && !test.startsWith("apps/marketing/")),
+    )
+    .flatMap(({ test, root: appRoot, name, compiled, always }) => {
+      const changed = files.filter((file) => file.startsWith(appRoot) && compiled(file));
+      if (changed.length === 0 || tests.has(test)) return [];
+      const names = changed
+        .filter((file) => present.includes(file))
+        .map((file) => `compiles ${escapeRegExp(name(file))}$`);
+      const pattern = [...names, ...always];
+      return pattern.length > 0 ? [{ test, names, pattern }] : [];
+    });
 
   // knip:check cannot be scoped to a package. Any code change can leave a file,
   // export, or dependency unused (removing the last import of a helper does), so
@@ -433,6 +455,7 @@ const checkChanged = Effect.fn("checkChanged")(function* (input: {
       file === ".pnpmfile.cjs" ||
       file.startsWith("patches/") ||
       file.startsWith("apps/mobile/deps/") ||
+      file.startsWith("apps/web/deps/") ||
       path.basename(file) === "package.json",
   );
 
@@ -479,10 +502,20 @@ const checkChanged = Effect.fn("checkChanged")(function* (input: {
           if (yield* fs.exists(inRoot(manifest))) yield* copy(manifest);
         }
       }
-      for (const extra of ["apps/mobile/deps", "patches", ".pnpmfile.cjs"]) {
+      for (const extra of ["apps/mobile/deps", "apps/web/deps", "patches", ".pnpmfile.cjs"]) {
         if (yield* fs.exists(inRoot(extra))) yield* copy(extra);
       }
-      const result = yield* vp(["install", "--lockfile-only", "--ignore-scripts"], temp);
+      const result = yield* vp(
+        [
+          "exec",
+          "pnpm",
+          "install",
+          "--lockfile-only",
+          "--ignore-scripts",
+          ...(npmRegistry ? [`--config.registry=${npmRegistry}`] : []),
+        ],
+        temp,
+      );
       if (result.ok || !result.output.includes("ERR_PNPM_UNUSED_PATCH")) return result;
       return {
         ok: false,
@@ -635,6 +668,10 @@ export const checkChangedCommand = Command.make(
         "Seconds before a step is killed; also CHECK_CHANGED_TIMEOUT. Defaults to 900.",
       ),
       Flag.optional,
+    ),
+    webDesktopOnly: Flag.Boolean("web-desktop").pipe(
+      Flag.withDescription("Exclude mobile and marketing packages from the fork's checks."),
+      Flag.withDefault(false),
     ),
   },
   (input) =>

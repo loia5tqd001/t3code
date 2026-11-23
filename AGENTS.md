@@ -6,7 +6,8 @@ These local preferences apply to every conversation in this checkout and overrid
 
 - **Personal fork only (`origin` = `loia5tqd001/t3code`, branch `personal/local-fixes`).** Never push to `upstream` (`pingdotgg/t3code`) and never open upstream PRs.
 - **Commit and push every change to `origin`.** After finishing and verifying any code, script, or config change, commit with a concise conventional commit message and push to `origin personal/local-fixes` (unless the user explicitly asks not to commit/push). Never use `--no-verify`.
-- **Web and desktop only.** Skip mobile (`apps/mobile`) and marketing (`apps/marketing`) unless explicitly requested.
+- **Web and desktop only.** Skip mobile (`apps/mobile`) and marketing (`apps/marketing`) unless explicitly requested. Use `vp run check:changed:fork`; upstream mobile-only checks and catalog drift are expected and must not block a merge.
+- **Upstream sync is autonomous.** Preserve dirty work with targeted stashes, merge `upstream/main`, and resolve routine conflicts by understanding both sides. Keep fork-specific behavior, exclude upstream mobile and marketing changes, restore stashes, run the fork check, commit, and push to `origin personal/local-fixes`. Abort only for a genuinely unrecoverable failure, and report its exact blocker and attempted resolution.
 - **Dev first; Fork only after user approval.** Use arm64 Node 26 (`$HOME/.local/share/vite-plus/js_runtime/node/26.13.1/bin:$HOME/.local/share/t3code-node26-arm64/bin`) for `vp`/`node`. Verify runtime changes in **T3 Code (Dev)** with `vp run dev:desktop` and an isolated `--home-dir`, then hand Dev to the user for testing. Do not rebuild, refresh, or relaunch **T3 Code (Fork)** until the user explicitly confirms the same changes work in Dev. Passing automated checks, committing, and pushing do not count as approval. After approval, use `./scripts/rebuild-local-fork.sh --web` for UI-only changes (the user presses `Cmd+Shift+R`) or `--full` for server/desktop/contract changes. Do not restart the running Fork app unless asked.
 
 T3 Code is a minimal GUI for coding agents. A Node WebSocket server wraps provider CLIs and agents (Codex, Claude Code, Cursor, Grok, OpenCode, Antigravity, Kiro, Pi, Muse Code, fx) and serves web, desktop, and mobile clients.
@@ -109,7 +110,7 @@ An empty database is a bad test. Seed your worktree's `.t3` with a copy of real 
 
 ## Verifying
 
-- Before you push, run `vp run check:changed`. It runs CI's fast checks for changed files: format, lint, knip, typecheck of affected packages and dependents, tests beside changes, and the cross-file checks those miss. CI still runs the full test suites.
+- Before you push in this fork, run `vp run check:changed:fork`. It runs the changed-file checks without mobile or marketing packages. Upstream CI still runs the full suites.
 - While you iterate, run `vp test run <files>`. For big files, add `-t "<name>"`.
 - Use `vp run typecheck`; it caches per package. Each package runs `effect-tsgo tsrs --noEmit`, the Rust TypeScript 7 checker with Effect's diagnostics built in. There is no `typescript` package to run.
 - Run `node -e` snippets from `apps/server` or the owning package. `effect` does not resolve from the repo root.

@@ -23,6 +23,7 @@ import {
   ignoredCheckInputs,
   runSteps,
   splitTests,
+  withoutForkExcludedPackages,
   type Step,
 } from "./check-changed.ts";
 import { decide, readWorkspace } from "../.github/scripts/ci-changes.cjs";
@@ -160,6 +161,12 @@ describe("check:changed", () => {
         ],
       },
     );
+  });
+
+  it("excludes mobile and marketing packages only for the fork check", () => {
+    const affected = ["t3", "@t3tools/web", "@t3tools/mobile", "@t3tools/marketing"];
+    assert.deepStrictEqual(withoutForkExcludedPackages(affected, false), affected);
+    assert.deepStrictEqual(withoutForkExcludedPackages(affected, true), ["t3", "@t3tools/web"]);
   });
 
   it.effect("fails instead of returning an empty file list when git exits nonzero", () => {
@@ -411,7 +418,8 @@ function launcherFixture() {
     fs.writeFileSync(path.join(process.env.RECORDS, process.pid + '.json'), JSON.stringify({ args, cwd: process.cwd() }));
     console.log('fixture stdout: ' + args[0]);
     console.error('fixture stderr: ' + args[0]);
-    process.exit(args[0] === process.env.FAIL_STEP ? 23 : 0);
+    const step = args[0] === 'exec' && args[1] === 'pnpm' ? args[2] : args[0];
+    process.exit(step === process.env.FAIL_STEP ? 23 : 0);
   `,
   );
   // Select the Windows launcher without changing the Effect runtime's host platform.
@@ -483,7 +491,7 @@ it("checks changed source paths through the Windows launcher", () => {
   });
   expect(calls.some(({ args }) => args[0] === "fmt" && args.includes(project.source))).toBe(true);
   expect(calls.some(({ args }) => args[0] === "run" && args.includes("typecheck"))).toBe(true);
-  expect(calls.some(({ args }) => args[0] === "install")).toBe(false);
+  expect(calls.some(({ args }) => args[0] === "exec" && args[1] === "pnpm")).toBe(false);
   expect(result.stdout).toContain("fixture stdout: lint");
   expect(result.stdout).toContain("fixture stderr: lint");
 });
@@ -514,15 +522,21 @@ it.each(["install", "lint"])("reports a failing %s step with its output", (step)
   );
   const result = project.run(step);
   expect(result.status, result.stdout + result.stderr).toBe(1);
-  const install = project.calls().find(({ args }) => args[0] === "install");
+  const install = project.calls().find(({ args }) => args[0] === "exec" && args[1] === "pnpm");
   expect(install?.args, result.stdout + result.stderr).toEqual([
+    "exec",
+    "pnpm",
     "install",
     "--lockfile-only",
     "--ignore-scripts",
+    ...(process.env.npm_config_registry
+      ? [`--config.registry=${process.env.npm_config_registry}`]
+      : []),
   ]);
   expect(install?.cwd).not.toBe(project.root);
-  expect(result.stdout + result.stderr).toContain(`fixture stdout: ${step}`);
-  expect(result.stdout + result.stderr).toContain(`fixture stderr: ${step}`);
+  const fixtureStep = step === "install" ? "exec" : step;
+  expect(result.stdout + result.stderr).toContain(`fixture stdout: ${fixtureStep}`);
+  expect(result.stdout + result.stderr).toContain(`fixture stderr: ${fixtureStep}`);
   expect(result.stdout).toContain(step === "install" ? "FAIL  unused patches" : "FAIL  lint");
   if (step === "lint") expect(result.stdout).toContain("pass  unused patches");
   expect(

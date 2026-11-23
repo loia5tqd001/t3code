@@ -357,6 +357,7 @@ export const makeMuseAdapterV2 = Effect.fn("makeMuseAdapterV2")(function* (
       let relaunchable = false;
       let nativeSessionId: string | undefined;
       let thread: OrchestrationV2ProviderThread | undefined;
+      let hasT3Mcp = false;
       let active: ActiveTurn | undefined;
       let lastProviderTurn: OrchestrationV2ProviderTurn | undefined;
       let latestSubscriptionUsage: MuseSubscriptionUsage | undefined;
@@ -2014,6 +2015,7 @@ export const makeMuseAdapterV2 = Effect.fn("makeMuseAdapterV2")(function* (
                 createdAt,
                 updatedAt: createdAt,
               };
+          hasT3Mcp = mcpSession !== undefined;
           session = {
             ...session,
             model: result.session.modelId ?? args.modelSelection.model,
@@ -2186,12 +2188,6 @@ export const makeMuseAdapterV2 = Effect.fn("makeMuseAdapterV2")(function* (
               (root) => museCanonicalPath(root).pipe(Effect.flatMap(museWorkspaceRoot)),
             );
             const mcpSession = yield* mcpSessions.read(turnInput.threadId);
-            const runtimeInstructions = buildRuntimeInstructions({
-              harness: "Muse Code",
-              model: session.model ?? undefined,
-              reasoningEffort: effort,
-              runtimePolicy: turnInput.runtimePolicy,
-            });
             const result = yield* request(
               "turn/start",
               {
@@ -2199,7 +2195,13 @@ export const makeMuseAdapterV2 = Effect.fn("makeMuseAdapterV2")(function* (
                   {
                     type: "text",
                     text:
-                      runtimeInstructions +
+                      buildRuntimeInstructions({
+                        agentFeedback: hasT3Mcp ? (turnInput.agentFeedback ?? "off") : "off",
+                        harness: "Muse Code",
+                        model: session.model ?? undefined,
+                        reasoningEffort: effort,
+                        runtimePolicy: turnInput.runtimePolicy,
+                      }) +
                       (mcpSession?.browserToolsAvailable
                         ? `\n\n${T3_CODE_BROWSERTHING_INSTRUCTIONS.trim()}`
                         : ""),

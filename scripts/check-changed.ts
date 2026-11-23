@@ -241,6 +241,12 @@ export const withoutForkExcludedPackages = (
   webDesktopOnly
     ? affected.filter((name) => name !== "@t3tools/mobile" && name !== "@t3tools/marketing")
     : affected;
+export const withoutForkExcludedFiles = (files: ReadonlyArray<string>, webDesktopOnly: boolean) =>
+  webDesktopOnly
+    ? files.filter(
+        (file) => !file.startsWith("apps/mobile/") && !file.startsWith("apps/marketing/"),
+      )
+    : files;
 const escapeRegExp = (text: string) => text.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
 
 // A flag wins over its environment variable; either must be a positive integer.
@@ -302,13 +308,24 @@ const checkChanged = Effect.fn("checkChanged")(function* (input: {
   // --no-renames lists a rename as its old and new path, as CI does.
   const changedFiles = lines("diff", "--name-only", "--no-renames", base, "--");
   const untrackedFiles = lines("ls-files", "--others", "--exclude-standard");
-  const files = [...new Set([...(yield* changedFiles), ...(yield* untrackedFiles)])].sort();
+  const allFiles = [...new Set([...(yield* changedFiles), ...(yield* untrackedFiles)])].sort();
+  const files = withoutForkExcludedFiles(allFiles, input.webDesktopOnly);
 
-  if (files.length === 0) {
+  if (allFiles.length === 0) {
     yield* Console.log(`check:changed: no changes since ${base.slice(0, 12)} (${ref}).`);
     return true;
   }
-  yield* Console.log(`check:changed: ${files.length} files since ${base.slice(0, 12)} (${ref})`);
+  if (files.length === 0) {
+    yield* Console.log(
+      `check:changed: no web/desktop files changed since ${base.slice(0, 12)} (${ref}).`,
+    );
+    return true;
+  }
+  const excluded = allFiles.length - files.length;
+  yield* Console.log(
+    `check:changed: ${files.length} files since ${base.slice(0, 12)} (${ref})` +
+      (excluded > 0 ? `; ${excluded} mobile/marketing files excluded` : ""),
+  );
 
   // Ignored generated sources, declarations, env files, and install state affect check results.
   // Include them in the key, but skip large ignored folders that no check reads.

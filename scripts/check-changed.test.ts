@@ -23,6 +23,7 @@ import {
   ignoredCheckInputs,
   runSteps,
   splitTests,
+  withoutForkExcludedFiles,
   withoutForkExcludedPackages,
   type Step,
 } from "./check-changed.ts";
@@ -167,6 +168,20 @@ describe("check:changed", () => {
     const affected = ["t3", "@t3tools/web", "@t3tools/mobile", "@t3tools/marketing"];
     assert.deepStrictEqual(withoutForkExcludedPackages(affected, false), affected);
     assert.deepStrictEqual(withoutForkExcludedPackages(affected, true), ["t3", "@t3tools/web"]);
+  });
+
+  it("excludes mobile and marketing files only for the fork check", () => {
+    const files = [
+      "apps/web/src/App.ts",
+      "apps/mobile/src/App.tsx",
+      "apps/marketing/src/pages/index.astro",
+      "apps/mobile-web/src/App.ts",
+    ];
+    assert.deepStrictEqual(withoutForkExcludedFiles(files, false), files);
+    assert.deepStrictEqual(withoutForkExcludedFiles(files, true), [
+      "apps/web/src/App.ts",
+      "apps/mobile-web/src/App.ts",
+    ]);
   });
 
   it.effect("fails instead of returning an empty file list when git exits nonzero", () => {

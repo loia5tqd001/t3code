@@ -42,6 +42,8 @@ import { useAtomCommand } from "../state/use-atom-command";
 import { vcsEnvironment } from "../state/vcs";
 import { cn } from "../lib/utils";
 import { THREAD_DETAILS_PANEL_ICON_CLASS } from "./chat/threadDetailsPanelStyles";
+import { resolveThreadDetailsVisibility } from "./chat/threadDetailsItems";
+import { useClientSettings } from "../hooks/useSettings";
 import { ThreadDetailsThreadPrRows } from "./chat/ThreadDetailsPrRows";
 import { ThreadDetailsIssueRows } from "./chat/ThreadDetailsIssueRows";
 import { parsePullRequestReference } from "@t3tools/client-runtime/pull-request-link-input";
@@ -734,6 +736,7 @@ export function BranchToolbarBranchSelector({
     branchPr,
     branchStatusQuery.data?.sourceControlProvider,
   );
+  const showPullRequests = useClientSettings(resolveThreadDetailsVisibility).pullRequests;
   const openPrLink = useOpenPrLink(threadRef);
   const linkedIssues = serverThread?.issues ?? [];
 
@@ -920,7 +923,7 @@ export function BranchToolbarBranchSelector({
             </ComposerContextLabel>
           </ComboboxTrigger>
         </span>
-        {displayMode === "panel" ? (
+        {displayMode === "panel" && showPullRequests ? (
           <ThreadDetailsThreadPrRows
             threadRef={threadRef}
             project={activeProject}

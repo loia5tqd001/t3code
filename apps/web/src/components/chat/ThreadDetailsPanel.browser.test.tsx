@@ -155,8 +155,10 @@ function setup(input: {
 function Panel({
   fixture,
   actions = {},
+  machines = 2,
 }: {
   fixture: ReturnType<typeof setup>;
+  machines?: number;
   actions?: {
     onOpenSideChat?: () => void;
     onFork?: () => void;
@@ -197,7 +199,13 @@ function Panel({
         gitCwd={state.folder}
         isGitRepo={state.isGitRepo}
         envLocked
-        availableEnvironments={[]}
+        availableEnvironments={Array.from({ length: machines }, (_, index) => ({
+          environmentId: EnvironmentId.make(index === 0 ? "environment" : `environment-${index}`),
+          projectId: null,
+          label: `Machine ${index}`,
+          isPrimary: index === 0,
+          machine: "server" as const,
+        }))}
         onEnvModeChange={noop}
         envMode="local"
         startFromOrigin={false}
@@ -235,6 +243,15 @@ it("keeps a plain folder's Workspace section", async () => {
   await expect
     .element(page.getByRole("button", { name: "Initialize Git" }))
     .not.toBeInTheDocument();
+});
+
+it("hides the environment row on a started thread when there is one machine", async () => {
+  using fixture = setup({
+    workspaceRoot: "/work/plain",
+    folder: "/work/plain",
+  });
+  await using _screen = await render(<Panel fixture={fixture} machines={1} />);
+  await expect.element(page.getByRole("region", { name: "Workspace" })).not.toBeInTheDocument();
 });
 
 it("keeps the branch in Workspace without the rest of Version Control", async () => {

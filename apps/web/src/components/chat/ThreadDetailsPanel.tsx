@@ -173,7 +173,11 @@ export function ThreadDetailsPanel(props: ThreadDetailsPanelProps) {
       {(density) => {
         // Section flags follow the rows that will render, so no empty section steals the divider rule.
         const show = {
-          environment: density === "full" && visible.environment,
+          // One machine makes the row identical in every thread; a draft still needs it to pick local or worktree.
+          environment:
+            density === "full" &&
+            visible.environment &&
+            (props.availableEnvironments.length > 1 || !props.isServerThread),
           openIn: density !== "essential" && visible.openIn && props.showOpenInPicker,
           scripts: visible.scripts && props.activeProjectScripts !== undefined,
           branch: offersGit && props.isGitRepo,

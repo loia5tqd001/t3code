@@ -467,6 +467,8 @@ describe("sidebar environment labels", () => {
       const row = screen.getByTestId("sidebar-row-folder").filter({ hasText: title });
       await expect.element(row).toHaveClass("h-9");
     }
+    const firstRow = screen.getByTestId("sidebar-row-folder").filter({ hasText: "Thread 0" });
+    expect((await firstRow.element()).className).not.toContain("ps-9");
     await expect.element(screen.getByText("#42")).not.toBeInTheDocument();
   });
 });

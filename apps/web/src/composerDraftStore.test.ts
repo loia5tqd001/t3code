@@ -2852,7 +2852,7 @@ describe("composerDraftStore checkout pull request", () => {
     store().setProjectDraftThreadId(projectRef, draftId, { threadId, branch: "main" });
   }
 
-  // GitActionsControl's live branch sync writes the git status branch onto the draft. The status
+  // The thread details branch picker writes the git status branch onto the draft. The status
   // refresh after a checkout is forked server-side, so the prepare response lands first and the
   // sync replays the stale pre-checkout branch before the fresh status corrects it.
   function liveBranchSync(branch: string) {

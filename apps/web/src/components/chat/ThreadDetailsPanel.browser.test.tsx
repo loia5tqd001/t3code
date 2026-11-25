@@ -4,7 +4,6 @@ import {
   ProjectId,
   ThreadId,
   type ScopedThreadRef,
-  type ThreadPullRequestLink,
 } from "@t3tools/contracts";
 import { AsyncResult, Atom } from "effect/reactivity";
 import { expect, it, vi } from "vite-plus/test";
@@ -17,9 +16,28 @@ const SCRATCH_ROOT = "/home/user/.t3/scratch";
 const state = vi.hoisted(() => ({
   workspaceRoot: "",
   folder: "",
-  pullRequests: [] as unknown[],
+  isGitRepo: false,
   servers: [] as Array<{ pid: number; port: number }>,
   configLoaded: true,
+}));
+
+vi.mock(import("~/state/queries"), async (importOriginal) => ({
+  ...(await importOriginal()),
+  usePaginatedBranches: () => ({
+    data: {
+      refs: [{ name: "main", current: true, isDefault: true, worktreePath: null }],
+      isRepo: true,
+      hasPrimaryRemote: false,
+      nextCursor: null,
+      totalCount: 1,
+    },
+    refs: [{ name: "main", current: true, isDefault: true, worktreePath: null }],
+    error: null,
+    isPending: false,
+    isFetchingNextPage: false,
+    refresh: () => {},
+    loadNext: () => {},
+  }),
 }));
 
 vi.mock(import("~/state/entities"), async (importOriginal) => ({
@@ -34,7 +52,6 @@ vi.mock(import("~/state/entities"), async (importOriginal) => ({
           workspaceRoot: state.workspaceRoot,
           scripts: [],
         }) as never,
-  useProjects: (() => []) as never,
   useQuietThreadShell: ((ref: unknown) =>
     ref === null
       ? null
@@ -44,7 +61,9 @@ vi.mock(import("~/state/entities"), async (importOriginal) => ({
           projectId: "project",
           worktreePath: state.folder,
           branch: null,
-          pullRequests: state.pullRequests,
+          linkedPullRequest: null,
+          branchPullRequest: null,
+          pullRequests: [],
         }) as never,
   useServerConfigs: (() =>
     new Map(
@@ -111,28 +130,17 @@ const threadRef: ScopedThreadRef = {
 };
 const container = { width: 1200, height: 800 };
 const placement = { x: 908, y: 0, right: 12, width: 280, height: 400 } as const;
-const linkedPullRequest: ThreadPullRequestLink = {
-  host: "github.com",
-  repository: "pingdotgg/t3code",
-  number: 27513,
-  url: "https://github.com/pingdotgg/t3code/pull/27513",
-  source: "manual",
-  linkedAt: "2026-10-30T00:00:00.000Z",
-  snapshot: null,
-  stack: null,
-};
-
 function setup(input: {
   workspaceRoot: string;
   folder: string;
-  pullRequests?: ThreadPullRequestLink[];
+  isGitRepo?: boolean;
   servers?: Array<{ pid: number; port: number }>;
   configLoaded?: boolean;
 }) {
   state.configLoaded = input.configLoaded ?? true;
   state.workspaceRoot = input.workspaceRoot;
   state.folder = input.folder;
-  state.pullRequests = input.pullRequests ?? [];
+  state.isGitRepo = input.isGitRepo ?? false;
   state.servers = input.servers ?? [];
   useRightPanelStore.setState({ threadPanelVisibilityByThreadKey: {} });
   const anchor = document.createElement("div");
@@ -180,7 +188,6 @@ function Panel({
         composerDraftTarget={threadRef}
         worktreePath={state.folder}
         isServerThread
-        activeProjectName={state.workspaceRoot === SCRATCH_ROOT ? "No project" : "plain"}
         activeProjectScripts={undefined}
         preferredScriptId={null}
         keybindings={[]}
@@ -188,8 +195,7 @@ function Panel({
         showOpenInPicker={false}
         openInShortcutEnabled={false}
         gitCwd={state.folder}
-        workspaceMutationId={null}
-        isGitRepo={false}
+        isGitRepo={state.isGitRepo}
         envLocked
         availableEnvironments={[]}
         onEnvModeChange={noop}
@@ -208,29 +214,47 @@ function Panel({
   );
 }
 
-it("offers no git controls in a No project thread, but shows its linked pull request", async () => {
+it("offers no git controls in a No project thread", async () => {
   using fixture = setup({
     workspaceRoot: SCRATCH_ROOT,
     folder: `${SCRATCH_ROOT}/thread`,
-    pullRequests: [linkedPullRequest],
   });
   await using _screen = await render(<Panel fixture={fixture} />);
-  await expect.element(page.getByText("#27513")).toBeVisible();
   await expect
     .element(page.getByRole("button", { name: "Initialize Git" }))
     .not.toBeInTheDocument();
 });
 
-it("shows a linked pull request in a folder that is not a git repository", async () => {
+it("keeps a plain folder's Workspace section", async () => {
   using fixture = setup({
     workspaceRoot: "/work/plain",
     folder: "/work/plain",
-    pullRequests: [linkedPullRequest],
   });
   await using _screen = await render(<Panel fixture={fixture} />);
   await expect.element(page.getByRole("region", { name: "Workspace" })).toBeVisible();
-  await expect.element(page.getByText("#27513")).toBeVisible();
-  await expect.element(page.getByRole("button", { name: "Initialize Git" })).toBeVisible();
+  await expect
+    .element(page.getByRole("button", { name: "Initialize Git" }))
+    .not.toBeInTheDocument();
+});
+
+it("keeps the branch in Workspace without the rest of Version Control", async () => {
+  using fixture = setup({
+    workspaceRoot: "/work/repo",
+    folder: "/work/repo",
+    isGitRepo: true,
+  });
+  await using screen = await render(<Panel fixture={fixture} />);
+
+  const workspace = screen.getByRole("region", { name: "Workspace" });
+  await expect.element(workspace.getByRole("combobox", { name: "Branch: main" })).toBeVisible();
+  await expect
+    .element(page.getByRole("region", { name: "Version Control" }))
+    .not.toBeInTheDocument();
+  await expect.element(page.getByText("Commit", { exact: true })).not.toBeInTheDocument();
+  await expect.element(page.getByText("Changes", { exact: true })).not.toBeInTheDocument();
+  await expect
+    .element(page.getByRole("button", { name: "Other repositories..." }))
+    .not.toBeInTheDocument();
 });
 
 it("offers no Initialize Git before the server config says where No project lives", async () => {
@@ -275,7 +299,10 @@ it("separates thread actions and leaves servers last", async () => {
     />,
   );
 
-  const actions = screen.getByText("New side chat").element().closest("section");
+  const actions = screen
+    .getByRole("button", { name: "New side chat" })
+    .element()
+    .closest("section");
   const servers = screen.getByRole("region", { name: "Servers" }).element();
   if (!actions) throw new Error("Expected thread actions to render in a section");
 

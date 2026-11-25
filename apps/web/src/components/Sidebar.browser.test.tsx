@@ -423,22 +423,11 @@ describe("sidebar environment labels", () => {
       boringSidebarEnabled: true,
     });
     const activeProject = project("active");
-    const threads = [
-      threadShell(activeProject.id, 0),
-      {
-        ...threadShell(activeProject.id, 1),
-        pullRequests: [
-          {
-            number: 42,
-            state: "open" as const,
-            title: "PR",
-            url: "https://example.com/pr/42",
-          },
-        ],
-      },
-    ];
+    const threads = [threadShell(activeProject.id, 0), threadShell(activeProject.id, 1)];
     vi.mocked(useProjects).mockReturnValue([activeProject]);
-    vi.mocked(useQuietThreadShells).mockReturnValue(threads);
+    vi.mocked(useQuietThreadShells).mockImplementation(
+      () => threads as unknown as ReturnType<typeof useQuietThreadShells>,
+    );
     vi.mocked(useThreadRouteTarget).mockReturnValue({
       kind: "server",
       threadRef: scopeThreadRef(threads[0]!.environmentId, threads[0]!.id),

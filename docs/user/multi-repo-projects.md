@@ -65,19 +65,6 @@ repository at a time. Pick it from the repository picker next to the source pick
 lists every repository the thread reaches, including ones no turn has touched, so edits you made by
 hand show up too.
 
-## Commit, push, and open pull requests
-
-Git actions run in one repository at a time.
-
-- **Web and desktop:** the thread details panel lists the repositories the thread changed, most
-  recent first, each with its branch and uncommitted changes. Expand one to commit, push, or open a
-  pull request there. **Other repositories...** adds any other repository of the project.
-- **Mobile:** open **Git controls** in the thread. The sheet lists the repositories under
-  **Repositories**; tap one for its own commit, push, and pull request actions.
-
-A pull request opened in a repository is linked to the thread under that repository, not under the
-project's.
-
 ## Worktree threads
 
 **New worktree** works for these projects too. The thread gets its own folder laid out like the
@@ -88,7 +75,7 @@ Every repository is included when the project covers eight or fewer; with more, 
 included until you choose. A repository with no commit yet is left out, since it has nothing to
 branch from. On web and desktop, your last choice is remembered for the project in
 that browser. To bring another repository into a running thread, pick it under **Other
-repositories** in the thread details panel or the mobile Git sheet.
+repositories** in the mobile Git sheet.
 
 Each repository starts from the thread's base branch where it has a branch of that name, and from
 its own default branch otherwise. A plain folder has no branch picker, so on web and desktop you

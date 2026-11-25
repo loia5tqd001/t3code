@@ -17,13 +17,9 @@ them. Paths in the diff start at the thread's folder, so the same file name in t
 stays apart. This works when the project folder itself is not a Git repository; the branch
 comparison and uncommitted changes read one repository at a time, chosen from the same picker.
 
-The thread details panel lists each repository the thread has changed, most recent first, with its
-branch and uncommitted changes. Expand one to commit, push, or open a pull request in that
-repository; a pull request opened there, or already open for its branch when a turn ends, is linked
-to the thread. **Other repositories...** adds any other repository of the project to the list until you
-reload. In a worktree thread of a project with several repositories it adds a worktree of that
-repository to the thread instead; see [Worktree threads](multi-repo-projects.md#worktree-threads). A
-worktree thread of a single repository does not offer it.
+The Diff pane lists each repository the thread has changed, most recent first, with its branch and
+uncommitted changes. A pull request opened in one of them, or already open for its branch when a
+turn ends, is linked to the thread.
 
 On web and desktop, open the Diff pane source picker and choose **Commits** to review one local
 commit at a time. The list shows the newest 100 commits in the branch comparison. A merge commit
@@ -386,8 +382,7 @@ failed reads in a row, or when you press Stop on the thread. A rate limit only p
 Settling or archiving a thread also ends all its watches. Unsettle the thread before starting a new
 watch. Watching a pull request again does not repeat check or conflict news its last
 watch already reported; unlinking the pull request clears that. Subagents cannot watch pull requests; the thread that delegated to them does. To start or stop
-it yourself, use the row menu in the **Linked items** panel. In the thread details card, a
-watched pull request shows an eye; click it to stop watching.
+it yourself, use the row menu in the **Linked items** panel or the branch picker.
 
 A watched thread counts as working while the pull request still has checks running, so it stays in
 the **Working** section, including after the agent pushes a fix. Once every check has finished,

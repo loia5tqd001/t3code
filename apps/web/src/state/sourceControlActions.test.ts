@@ -3,7 +3,6 @@ import {
   AuthSourceControlWriteScope,
   EnvironmentId,
   ThreadId,
-  SourceControlProviderKind,
 } from "@t3tools/contracts";
 import * as Cause from "effect/Cause";
 import { AsyncResult } from "effect/reactivity";
@@ -19,9 +18,6 @@ vi.mock("@effect/atom-react", () => ({
   useAtomValue: () => ({ operation: null, error: null, isRunning: false }),
 }));
 vi.mock("../rpc/atomRegistry", () => ({ appAtomRegistry: {} }));
-vi.mock("../components/sourceControlAppAccessToast", () => ({
-  suggestAppAccessForRemote: () => Promise.resolve(),
-}));
 vi.mock("./session", () => ({
   useEnvironmentScope: (environmentId: string, scope: string) =>
     state.scopes.get(environmentId)?.has(scope) === true,
@@ -41,76 +37,24 @@ vi.mock("./use-atom-command", () => ({
     },
 }));
 vi.mock("./vcs", () => ({
-  vcsEnvironment: { init: { action: "init" }, pull: { action: "pull" }, status: () => "status" },
   vcsActionManager: {
     stateAtom: () => "state",
     resetError: () => {},
     track: (_registry: unknown, _target: unknown, _input: unknown, execute: () => unknown) =>
       execute(),
-    runStackedAction: (scope: { environmentId: string }) => ({ action: "stack", ...scope }),
   },
-}));
-vi.mock("./sourceControl", () => ({
-  sourceControlEnvironment: { publishRepository: { action: "publish" } },
 }));
 vi.mock("./git", () => ({
   gitEnvironment: { preparePullRequestThread: { action: "prepare" } },
 }));
 
-import {
-  useGitStackedAction,
-  usePreparePullRequestThreadAction,
-  useSourceControlPublishRepositoryAction,
-  useVcsInitAction,
-  useVcsPullAction,
-} from "./sourceControlActions";
+import { usePreparePullRequestThreadAction } from "./sourceControlActions";
 
 const primary = EnvironmentId.make("primary");
 const secondary = EnvironmentId.make("secondary");
 const scope = { environmentId: secondary, cwd: "/repo" };
 const threadId = ThreadId.make("thread");
 const cases = [
-  {
-    name: "init",
-    create: () => {
-      const action = useVcsInitAction(scope);
-      return { isAllowed: action.isAllowed, run: () => action.run() };
-    },
-  },
-  {
-    name: "pull",
-    create: () => {
-      const action = useVcsPullAction(scope);
-      return { isAllowed: action.isAllowed, run: () => action.run() };
-    },
-  },
-  {
-    name: "stack",
-    create: () => {
-      const action = useGitStackedAction(scope);
-      return {
-        isAllowed: action.isAllowed,
-        run: () => action.run({ actionId: "action", action: "commit" }),
-      };
-    },
-  },
-  {
-    name: "publish",
-    create: () => {
-      const action = useSourceControlPublishRepositoryAction(scope);
-      return {
-        isAllowed: action.isAllowed,
-        run: () =>
-          action.run({
-            provider: SourceControlProviderKind.make("github"),
-            repository: "owner/repo",
-            visibility: "private",
-            remoteName: "origin",
-            protocol: "ssh",
-          }),
-      };
-    },
-  },
   {
     name: "prepare",
     create: () => {

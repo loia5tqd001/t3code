@@ -1393,6 +1393,64 @@ describe("AntigravityAdapterV2 work after the prompt ends", () => {
     }).pipe(Effect.provide(layerSession)),
   );
 
+  // A steer answered while an earlier silent command still runs settles the prompt again; the
+  // hold must still bound that command, or every later message steers into a run that never ends.
+  it.effect("settles a silent command after a steered prompt answers past the hold bound", () =>
+    Effect.gen(function* () {
+      const opened = yield* openSessionWithRunningCommand({ WaitMsBeforeAsync: 10000 }, undefined, {
+        agentVersion: "1.5.11",
+        holdsFirstPrompt: false,
+      });
+      const { session, providerThread, command, usage, send, startTurn, until } = opened;
+      yield* startTurn(1, false);
+      const prompt = yield* opened.throughPromptSettled;
+      const providerTurnId = prompt.flatMap((event) =>
+        event.type === "provider_turn.updated" ? [event.providerTurn.id] : [],
+      )[0]!;
+
+      yield* TestClock.adjust("5 minutes");
+      yield* session.steerTurn({
+        threadId: ThreadId.make("thread-antigravity-wake"),
+        runId: RunId.make("run-antigravity-wake-1"),
+        providerThread,
+        providerTurnId,
+        message: {
+          messageId: MessageId.make("message-antigravity-steer"),
+          text: "What's the progress so far?",
+          attachments: [],
+          createdBy: "user",
+          creationSource: "web",
+        },
+      });
+      assert.lengthOf(opened.prompts, 2);
+      yield* send({
+        sessionUpdate: "agent_message_chunk",
+        content: { type: "text", text: "Still waiting on the fetch." },
+      });
+      yield* send(usage);
+      yield* opened.releaseSteer;
+
+      yield* TestClock.adjust("20 minutes");
+      yield* TestClock.adjust("11 minutes");
+      const run = yield* until((event) => event.type === "turn.terminal");
+      const terminal = run.at(-1);
+      assert.equal(
+        terminal?.type === "turn.terminal" && terminal.status,
+        "completed",
+        "the steered run settles once only the silent command holds it",
+      );
+      assert.include(JSON.stringify(run), "Still waiting on the fetch.");
+      const commandItem = [...prompt, ...run].findLast(
+        (event) =>
+          event.type === "turn_item.updated" &&
+          event.turnItem.nativeItemRef?.nativeId === command.toolCallId,
+      );
+      assert.isTrue(
+        commandItem?.type === "turn_item.updated" && commandItem.turnItem.status === "completed",
+      );
+    }).pipe(Effect.provide(layerSession)),
+  );
+
   it.effect("keeps a silent scheduled wake in its run past the command hold bound", () =>
     Effect.gen(function* () {
       const { usage, offers, send, startTurn, until, throughPromptSettled } =

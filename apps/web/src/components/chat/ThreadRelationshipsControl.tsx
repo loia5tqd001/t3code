@@ -476,6 +476,8 @@ export function ThreadRelationshipsPanel(props: {
   readonly threadId: ThreadId;
   readonly showLineage: boolean;
   readonly showSideChats: boolean;
+  // Header actions keep the section visible even when the thread has no side chats yet.
+  readonly sideChatActions?: ReactNode;
 }) {
   const gt = useGT();
   const m = useMessages();
@@ -674,7 +676,8 @@ export function ThreadRelationshipsPanel(props: {
       delegatedFrom !== undefined ||
       // Disconnect lives in this heading, so a thread with only side chats still shows it.
       (canDetach && sideChats.length > 0));
-  const sideChatsVisible = props.showSideChats && sideChats.length > 0;
+  const sideChatsVisible =
+    props.showSideChats && (sideChats.length > 0 || props.sideChatActions !== undefined);
   const runningSideChats = sideChats.filter(({ edge }) => edge.status === "running").length;
 
   if (!lineageVisible && !sideChatsVisible) {
@@ -1132,6 +1135,7 @@ export function ThreadRelationshipsPanel(props: {
               : gt("Side chats")
           }
           data-thread-side-chats-panel
+          actions={props.sideChatActions}
         >
           <ThreadLineageGroup
             key={`${scopedThreadKey(ref)}:side-chats`}

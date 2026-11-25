@@ -1000,7 +1000,6 @@ export default function Sidebar({ routeReveal }: { routeReveal: SidebarRouteReve
     },
   });
   const boringSidebarEnabled = useClientSettings((settings) => settings.boringSidebarEnabled);
-  const folderRowsMultiline = useClientSettings((settings) => settings.boringSidebarMultilineRows);
   const newThreadContext = useHandleNewThread();
   // Row callbacks capture only the handler; the rest of the context changes with the route.
   const { handleNewThread } = newThreadContext;
@@ -3348,7 +3347,11 @@ export default function Sidebar({ routeReveal }: { routeReveal: SidebarRouteReve
                               `${thread.environmentId}:${thread.projectId}`,
                             ) ?? null
                           }
-                          environmentLabel={environmentLabelById.get(thread.environmentId) ?? null}
+                          environmentLabel={
+                            showProjectEnvironments
+                              ? (environmentLabelById.get(thread.environmentId) ?? null)
+                              : null
+                          }
                           environmentMachine={
                             environmentMachineById.get(thread.environmentId) ?? "server"
                           }
@@ -3489,13 +3492,7 @@ export default function Sidebar({ routeReveal }: { routeReveal: SidebarRouteReve
                         );
                         const isCard =
                           section === "active" || section === "pinned" || section === "working";
-                        const rowVariant = folderRow
-                          ? folderRowsMultiline
-                            ? "folder-multiline"
-                            : "folder"
-                          : isCard
-                            ? "card"
-                            : "slim";
+                        const rowVariant = folderRow ? "folder" : isCard ? "card" : "slim";
                         return (
                           <SortableThreadRow
                             key={threadKey}
@@ -3558,7 +3555,9 @@ export default function Sidebar({ routeReveal }: { routeReveal: SidebarRouteReve
                               showJumpHints ? (jumpLabelByKey.get(threadKey) ?? null) : null
                             }
                             environmentLabel={
-                              environmentLabelById.get(thread.environmentId) ?? null
+                              showProjectEnvironments
+                                ? (environmentLabelById.get(thread.environmentId) ?? null)
+                                : null
                             }
                             environmentMachine={
                               environmentMachineById.get(thread.environmentId) ?? "server"

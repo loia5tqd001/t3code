@@ -25,6 +25,7 @@ import { useNowMinute } from "../hooks/useNowMinute";
 import { __setClientSettingsForTests, getClientSettings } from "../hooks/useSettings";
 import { useThreadRouteTarget } from "../hooks/useThreadRouteTarget";
 import { useProjects, useServerConfigs, useQuietThreadShells } from "../state/entities";
+import { useEnvironmentIdentities } from "../state/environments";
 import { readEnvironmentScope, useEnvironmentScope } from "../state/session";
 import { useOrchestrationCommand } from "../state/use-orchestration-command";
 import { useTerminalUiStateStore } from "../terminalUiStateStore";
@@ -40,6 +41,7 @@ vi.mock(import("../state/olderSettledShelf"), async (original) => {
   return { ...actual, useOlderSettledShelf: vi.fn(actual.useOlderSettledShelf) };
 });
 vi.mock("../state/entities", { spy: true });
+vi.mock("../state/environments", { spy: true });
 vi.mock("../hooks/useHandleNewThread", { spy: true });
 vi.mock("../hooks/useNowMinute", { spy: true });
 vi.mock("../hooks/useThreadRouteTarget", { spy: true });
@@ -67,10 +69,10 @@ vi.mock("./sidebar/SidebarChrome", () => ({
   SidebarChromeFooter: () => null,
 }));
 
-function project(id: string): Project {
+function project(id: string, environmentId = EnvironmentId.make("local")): Project {
   return {
     id: ProjectId.make(id),
-    environmentId: EnvironmentId.make("local"),
+    environmentId,
     title: id,
     workspaceRoot: `/projects/${id}`,
     repositoryIdentity: null,
@@ -365,6 +367,107 @@ describe("sidebar thread menu", () => {
     await userEvent.click(row, { button: "right" });
     await vi.waitFor(() => expect(show).toHaveBeenCalledTimes(2));
     expect(show.mock.lastCall?.[2]).toBe("mouse");
+  });
+});
+
+describe("sidebar environment labels", () => {
+  it("shows the environment only when projects span environments", async () => {
+    const localProject = project("local-project");
+    const remoteEnvironmentId = EnvironmentId.make("remote");
+    const remoteProject = project("remote-project", remoteEnvironmentId);
+    const thread = threadShell(localProject.id, 0);
+    const threadRef = scopeThreadRef(thread.environmentId, thread.id);
+    vi.mocked(useProjects).mockReturnValue([localProject]);
+    vi.mocked(useQuietThreadShells).mockReturnValue([thread]);
+    vi.mocked(useThreadRouteTarget).mockReturnValue({ kind: "server", threadRef });
+    vi.mocked(useHandleNewThread).mockReturnValue({
+      activeDraftThread: null,
+      activeThread: null,
+      defaultProjectRef: {
+        environmentId: localProject.environmentId,
+        projectId: localProject.id,
+      },
+      defaultProjectFallbackReady: true,
+      handleNewThread: vi.fn().mockResolvedValue(null),
+      routeDraftId: null,
+      routeThreadRef: threadRef,
+    });
+    vi.mocked(useEnvironmentIdentities).mockReturnValue([
+      { environmentId: localProject.environmentId, label: "G629NC46FP" },
+      { environmentId: remoteEnvironmentId, label: "Remote" },
+    ]);
+    const tree = () => (
+      <SidebarProvider>
+        <Sidebar routeReveal={{ observedKey: null, pendingKey: null }} />
+      </SidebarProvider>
+    );
+
+    await using screen = await render(tree());
+    await expect.element(screen.getByText("Thread 0").first()).toBeInTheDocument();
+    expect(vi.mocked(SortableThreadRow).mock.lastCall?.[0].environmentLabel).toBeNull();
+    await expect.element(screen.getByText("G629NC46FP")).not.toBeInTheDocument();
+
+    vi.mocked(useProjects).mockReturnValue([localProject, remoteProject]);
+    await screen.rerender(tree());
+
+    await expect.element(screen.getByText("G629NC46FP").first()).toBeInTheDocument();
+    expect(vi.mocked(SortableThreadRow).mock.lastCall?.[0].environmentLabel).toBe("G629NC46FP");
+  });
+
+  it("keeps folder rows one line and omits pull request metadata", async () => {
+    using stack = new DisposableStack();
+    const previousSettings = getClientSettings();
+    stack.defer(() => __setClientSettingsForTests(previousSettings));
+    __setClientSettingsForTests({
+      ...DEFAULT_CLIENT_SETTINGS,
+      boringSidebarEnabled: true,
+    });
+    const activeProject = project("active");
+    const threads = [
+      threadShell(activeProject.id, 0),
+      {
+        ...threadShell(activeProject.id, 1),
+        pullRequests: [
+          {
+            number: 42,
+            state: "open" as const,
+            title: "PR",
+            url: "https://example.com/pr/42",
+          },
+        ],
+      },
+    ];
+    vi.mocked(useProjects).mockReturnValue([activeProject]);
+    vi.mocked(useQuietThreadShells).mockReturnValue(threads);
+    vi.mocked(useThreadRouteTarget).mockReturnValue({
+      kind: "server",
+      threadRef: scopeThreadRef(threads[0]!.environmentId, threads[0]!.id),
+    });
+    vi.mocked(useHandleNewThread).mockReturnValue({
+      activeDraftThread: null,
+      activeThread: null,
+      defaultProjectRef: {
+        environmentId: activeProject.environmentId,
+        projectId: activeProject.id,
+      },
+      defaultProjectFallbackReady: true,
+      handleNewThread: vi.fn().mockResolvedValue(null),
+      routeDraftId: null,
+      routeThreadRef: scopeThreadRef(threads[0]!.environmentId, threads[0]!.id),
+    });
+    await using screen = await render(
+      <SidebarProvider>
+        <Sidebar routeReveal={{ observedKey: null, pendingKey: null }} />
+      </SidebarProvider>,
+    );
+
+    const folder = screen.getByRole("button", { name: /^active/ });
+    await expect.element(folder).toHaveAttribute("aria-expanded", "true");
+    for (const title of ["Thread 0", "Thread 1"]) {
+      const row = screen.getByTestId("sidebar-row-folder").filter({ hasText: title });
+      await expect.element(row).toHaveClass("h-9");
+    }
+    await expect.element(screen.getByText("#42")).not.toBeInTheDocument();
   });
 });
 

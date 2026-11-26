@@ -413,6 +413,30 @@ describe("v2 thread shell lists", () => {
       ...v2ShellSnapshot,
       threads: [
         root,
+        sideChat("seen-limited", {
+          status: "failed" as const,
+          lastErrorClass: "usage_limit" as const,
+          pendingRuntimeRequest: null,
+        }),
+        sideChat("blocked-run", {
+          status: "running" as const,
+          activityRunStatus: "running" as const,
+          blockedOnThreadWait: true,
+          pendingRuntimeRequest: null,
+        }),
+      ],
+    });
+    expect(registry.get(summary)).toEqual({
+      running: 0,
+      attention: 1,
+      completed: 0,
+      failed: 0,
+    });
+
+    registry.set(snapshotAtom(environmentId), {
+      ...v2ShellSnapshot,
+      threads: [
+        root,
         sideChat("unseen-failure", {
           status: "failed" as const,
           lastVisitedAt: DateTime.makeUnsafe("2026-03-17T19:10:00.000Z"),

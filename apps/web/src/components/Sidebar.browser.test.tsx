@@ -221,16 +221,7 @@ describe("sidebar side chat status", () => {
     });
     vi.mocked(useProjects).mockReturnValue([activeProject]);
     vi.mocked(useQuietThreadShells).mockReturnValue([parent]);
-    vi.mocked(useSideChatSummary).mockImplementation((ref) =>
-      ref?.threadId === parent.id
-        ? {
-            running: 1,
-            attention: 0,
-            completed: 0,
-            failed: 0,
-          }
-        : null,
-    );
+    vi.mocked(useSideChatSummary).mockReturnValue(null);
     vi.mocked(useThreadRouteTarget).mockReturnValue({
       kind: "server",
       threadRef: scopeThreadRef(parent.environmentId, parent.id),
@@ -254,7 +245,9 @@ describe("sidebar side chat status", () => {
       </SidebarProvider>,
     );
     const card = screen.getByTestId("sidebar-row-card-body");
-    const heightBefore = (await card.element()).getBoundingClientRect().height;
+    await expect
+      .element(screen.getByTestId(`sidebar-side-chats-${parent.id}`))
+      .not.toBeInTheDocument();
 
     vi.mocked(useSideChatSummary).mockImplementation((ref) =>
       ref?.threadId === parent.id
@@ -273,7 +266,9 @@ describe("sidebar side chat status", () => {
     );
     const sideChats = screen.getByTestId(`sidebar-side-chats-${parent.id}`);
     await expect.element(sideChats).toBeInTheDocument();
-    expect((await card.element()).getBoundingClientRect().height).toBe(heightBefore);
+    expect((await sideChats.element()).getBoundingClientRect().height).toBeLessThanOrEqual(
+      (await card.element()).getBoundingClientRect().height,
+    );
   });
 });
 

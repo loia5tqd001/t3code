@@ -200,7 +200,6 @@ import {
   resolveSidebarDropTarget,
   resolveSidebarDropVerb,
   resolveSidebarThreadSection,
-  resolveSidebarFolderDot,
   resolveSidebarReorderableThreadKeys,
   searchSidebarThreads,
   shouldCreateNewThreadInCurrentProject,
@@ -218,6 +217,7 @@ import {
   type SidebarListItem,
   type SidebarSection,
 } from "./Sidebar.logic";
+import { resolveSidebarFolderDot } from "@t3tools/client-runtime/state/thread-status";
 import {
   createSidebarCollisionDetection,
   createSidebarSortingStrategy,

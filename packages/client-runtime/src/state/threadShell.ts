@@ -18,7 +18,7 @@ import { Atom } from "effect/reactivity";
 
 import type { EnvironmentThreadShell, PendingSubagentRequest } from "./models.ts";
 import { presentThreadShell, threadRuntimeIsActive } from "./models.ts";
-import { hasUnseenRunFailure } from "./threadSettled.ts";
+import { resolveSidebarThreadIndicator } from "./threadStatus.ts";
 import { hiddenThreadKeys, NO_HIDDEN_THREADS } from "./threadTagFilter.ts";
 import { type EnvironmentCatalogState, enabledEnvironmentIds } from "./connections.ts";
 import {
@@ -162,35 +162,22 @@ function summarizeSideChats(threads: ReadonlyArray<EnvironmentThreadShell>): Sid
   let failed = 0;
   for (const thread of threads) {
     if (thread.archivedAt !== null) continue;
-    if (
-      thread.hasPendingApprovals ||
-      thread.hasPendingUserInput ||
-      thread.pendingSubagentRequest === "approval" ||
-      thread.pendingSubagentRequest === "user_input" ||
-      (thread.pendingGuestMessageCount ?? 0) > 0 ||
-      (thread.runtime?.status === "failed" &&
-        thread.runtime.lastErrorClass === "usage_limit" &&
-        (thread.latestRun?.status !== "failed" ||
-          hasUnseenRunFailure({
-            latestRun: thread.latestRun,
-            lastVisitedAt: thread.lastVisitedAt,
-          })))
-    ) {
-      attention++;
-    } else if (
-      thread.runtime?.status === "failed" &&
-      hasUnseenRunFailure({ latestRun: thread.latestRun, lastVisitedAt: thread.lastVisitedAt })
-    ) {
-      failed++;
-    } else if (threadRuntimeIsActive(thread.runtime)) running++;
-    else if (
-      thread.latestRun?.completedAt != null &&
-      thread.latestRun.status !== "interrupted" &&
-      thread.latestRun.status !== "cancelled" &&
-      thread.lastVisitedAt != null &&
-      Date.parse(thread.latestRun.completedAt) > Date.parse(thread.lastVisitedAt)
-    )
-      completed++;
+    switch (resolveSidebarThreadIndicator(thread)) {
+      case "attention":
+        attention++;
+        break;
+      case "failed":
+        failed++;
+        break;
+      case "unread":
+        completed++;
+        break;
+      case "working":
+        running++;
+        break;
+      case null:
+        break;
+    }
   }
   return running + attention + completed + failed === 0
     ? null

@@ -147,6 +147,48 @@ function sideChatRequest(thread: OrchestrationV2ThreadShell): PendingSubagentReq
   return kind === "user_input" ? "user_input" : "approval";
 }
 
+export type SideChatSummary = {
+  readonly running: number;
+  readonly attention: number;
+  readonly completed: number;
+  readonly failed: number;
+} | null;
+
+function summarizeSideChats(threads: ReadonlyArray<EnvironmentThreadShell>): SideChatSummary {
+  let running = 0;
+  let attention = 0;
+  let completed = 0;
+  let failed = 0;
+  for (const thread of threads) {
+    if (thread.hasPendingApprovals || thread.hasPendingUserInput) attention++;
+    else if (thread.runtime?.status === "failed") failed++;
+    else if (threadRuntimeIsActive(thread.runtime)) running++;
+    else if (
+      thread.latestRun?.completedAt != null &&
+      thread.latestRun.status !== "interrupted" &&
+      thread.latestRun.status !== "cancelled" &&
+      (thread.lastVisitedAt == null ||
+        Date.parse(thread.latestRun.completedAt) > Date.parse(thread.lastVisitedAt))
+    )
+      completed++;
+  }
+  return running + attention + completed + failed === 0
+    ? null
+    : { running, attention, completed, failed };
+}
+
+function sameSideChatSummary(left: SideChatSummary, right: SideChatSummary): boolean {
+  return (
+    left === right ||
+    (left !== null &&
+      right !== null &&
+      left.running === right.running &&
+      left.attention === right.attention &&
+      left.completed === right.completed &&
+      left.failed === right.failed)
+  );
+}
+
 const asksParent = (thread: OrchestrationV2ThreadShell) =>
   subagentRequest(thread) !== null || sideChatRequest(thread) !== null;
 
@@ -600,7 +642,12 @@ export function createEnvironmentThreadShellAtoms(input: {
             thread.title === next[index]?.title &&
             thread.hasPendingApprovals === next[index]?.hasPendingApprovals &&
             thread.hasPendingUserInput === next[index]?.hasPendingUserInput &&
-            thread.pendingSubagentRequest === next[index]?.pendingSubagentRequest,
+            thread.pendingSubagentRequest === next[index]?.pendingSubagentRequest &&
+            thread.hasActionableProposedPlan === next[index]?.hasActionableProposedPlan &&
+            thread.interactionMode === next[index]?.interactionMode &&
+            thread.runtime === next[index]?.runtime &&
+            thread.latestRun === next[index]?.latestRun &&
+            thread.lastVisitedAt === next[index]?.lastVisitedAt,
         )
       ) {
         return previous;
@@ -608,6 +655,25 @@ export function createEnvironmentThreadShellAtoms(input: {
       previous = next;
       return next;
     }).pipe(Atom.withLabel(`environment-side-chats:${key}`));
+  });
+
+  const sideChatSummaryAtomFamily = Atom.family((key: string) => {
+    const ref = parseThreadKey(key);
+    let previous: SideChatSummary = null;
+    return Atom.make((get) => {
+      const sideChats = get(environmentSideChatsByParentAtom(ref.environmentId)).get(ref.threadId);
+      if (sideChats === undefined) {
+        previous = null;
+        return previous;
+      }
+      const subagentRequests = get(pendingSubagentRequestsAtom(ref.environmentId));
+      const next = summarizeSideChats(
+        sideChats.map((thread) => scopedThread(ref.environmentId, thread, subagentRequests)),
+      );
+      if (sameSideChatSummary(previous, next)) return previous;
+      previous = next;
+      return next;
+    }).pipe(Atom.withLabel(`environment-side-chat-summary:${key}`));
   });
 
   const threadShellsForProjectRefsAtomFamily = Atom.family((key: string) => {
@@ -813,5 +879,6 @@ export function createEnvironmentThreadShellAtoms(input: {
     quietThreadShellAtom: (ref: ScopedThreadRef) => quietThreadShellAtomFamily(threadKey(ref)),
     childThreadInputsAtom: (ref: ScopedThreadRef) => childThreadInputsAtomFamily(threadKey(ref)),
     sideChatsAtom: (ref: ScopedThreadRef) => sideChatsAtomFamily(threadKey(ref)),
+    sideChatSummaryAtom: (ref: ScopedThreadRef) => sideChatSummaryAtomFamily(threadKey(ref)),
   };
 }

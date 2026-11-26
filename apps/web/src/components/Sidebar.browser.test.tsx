@@ -519,7 +519,6 @@ describe("sidebar environment labels", () => {
     const folder = screen.getByTestId("sidebar-project-folder");
     await expect.element(folder).toHaveAttribute("data-project-folder-side-chat-state", "working");
     await expect.element(folder.getByText(", working", { exact: true })).toBeVisible();
-
     const folderButton = folder.getByRole("button", { name: /^active/ });
     await userEvent.click(folderButton);
     await expect.element(folderButton).toHaveAttribute("aria-expanded", "false");

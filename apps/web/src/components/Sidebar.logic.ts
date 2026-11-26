@@ -1,9 +1,6 @@
 import type { EnvironmentServerConfig } from "@t3tools/client-runtime/connection";
 import { scopeThreadRef, scopedThreadKey } from "@t3tools/client-runtime/environment";
-import {
-  resolveThreadWorkingStartedAt,
-  type EnvironmentThreadShell,
-} from "@t3tools/client-runtime/state/models";
+import { resolveThreadWorkingStartedAt } from "@t3tools/client-runtime/state/models";
 import { isShownUnderParent } from "@t3tools/client-runtime/state/threads";
 import { backgroundWorkHoldsCompletion } from "@t3tools/shared/orchestrationV2PendingBackgroundWork";
 import { threadPullRequestSearchTerms } from "@t3tools/shared/threadPullRequests";
@@ -1052,30 +1049,6 @@ export function resolveSidebarFolderDot(
   if (hasUnread) return "unread";
   if (statuses.has("working") || statuses.has("preparing")) return "working";
   return null;
-}
-
-/** A project folder's dot: its listed threads plus the side chats nested under them. */
-export function resolveProjectFolderSideChatDot(
-  projects: ReadonlyArray<{
-    readonly environmentId: EnvironmentId;
-    readonly projectId: string;
-  }>,
-  sideChats: ReadonlyArray<
-    Pick<EnvironmentThreadShell, "environmentId" | "projectId" | "archivedAt"> &
-      ThreadStatusInput &
-      SidebarThreadStatusInput
-  >,
-): "attention" | "failed" | "unread" | "working" | null {
-  const projectKeys = new Set(
-    projects.map((project) => `${project.environmentId}:${project.projectId}`),
-  );
-  return resolveSidebarFolderDot(
-    sideChats.filter(
-      (thread) =>
-        thread.archivedAt === null &&
-        projectKeys.has(`${thread.environmentId}:${thread.projectId}`),
-    ),
-  );
 }
 
 /**

@@ -9,11 +9,7 @@ import { cn } from "~/lib/utils";
 import { contextMenuSourceOf } from "../../contextMenuSource";
 import type { SidebarProjectSnapshot } from "../../sidebarProjectGrouping";
 import { useUiStateStore } from "../../uiStateStore";
-import {
-  resolveSidebarFolderDot,
-  resolveProjectFolderSideChatDot,
-  resolveThreadLastVisitedAt,
-} from "../Sidebar.logic";
+import { resolveSidebarFolderDot, resolveThreadLastVisitedAt } from "../Sidebar.logic";
 import { ProjectFavicon } from "../ProjectFavicon";
 import { Button } from "../ui/button";
 import { Tooltip, TooltipPopup, TooltipTrigger } from "../ui/tooltip";
@@ -46,7 +42,7 @@ export const SidebarProjectFolderHeader = memo(function SidebarProjectFolderHead
   group: SidebarProjectSnapshot;
   collapsed: boolean;
   hiddenThreads: readonly EnvironmentThreadShell[];
-  sideChats: readonly EnvironmentThreadShell[];
+  sideChatState: "attention" | "failed" | "unread" | "working" | null;
   onToggle: (group: SidebarProjectSnapshot) => void;
   onNewThread: (group: SidebarProjectSnapshot) => void;
   onContextMenu: (
@@ -57,7 +53,7 @@ export const SidebarProjectFolderHeader = memo(function SidebarProjectFolderHead
 }) {
   const gt = useGT();
   const m = useMessages();
-  const { group, collapsed, hiddenThreads, sideChats } = props;
+  const { group, collapsed, hiddenThreads, sideChatState } = props;
   const rowId = sidebarFolderRowId(group.projectKey);
   const localLastVisitedAtById = useUiStateStore((state) => state.threadLastVisitedAtById);
   const threadDot = collapsed
@@ -73,7 +69,7 @@ export const SidebarProjectFolderHeader = memo(function SidebarProjectFolderHead
         })),
       )
     : null;
-  const sideChatDot = resolveProjectFolderSideChatDot(group.memberProjectRefs, sideChats);
+  const sideChatDot = sideChatState;
   const dot =
     threadDot === "attention" || sideChatDot === "attention"
       ? "attention"

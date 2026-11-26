@@ -55,6 +55,9 @@ const EMPTY_THREAD_REFS_ATOM = Atom.make(EMPTY_THREAD_REFS).pipe(
 const EMPTY_THREAD_SHELLS_ATOM = Atom.make<ReadonlyArray<EnvironmentThreadShell>>(
   Object.freeze([]),
 ).pipe(Atom.withLabel("web-thread-shells:empty"));
+const EMPTY_SIDE_CHAT_SUMMARY_ATOM = Atom.make(null).pipe(
+  Atom.withLabel("web-side-chat-summary:empty"),
+);
 const EMPTY_THREAD_SHELL_ATOM = Atom.make<EnvironmentThreadShell | null>(null).pipe(
   Atom.withLabel("web-thread-shell:empty"),
 );
@@ -182,6 +185,12 @@ export function useChildThreadInputs(ref: ScopedThreadRef | null) {
 export function useSideChats(ref: ScopedThreadRef | null): ReadonlyArray<EnvironmentThreadShell> {
   return useAtomValue(
     ref === null ? EMPTY_THREAD_SHELLS_ATOM : environmentThreadShells.sideChatsAtom(ref),
+  );
+}
+
+export function useSideChatSummary(ref: ScopedThreadRef | null) {
+  return useAtomValue(
+    ref === null ? EMPTY_SIDE_CHAT_SUMMARY_ATOM : environmentThreadShells.sideChatSummaryAtom(ref),
   );
 }
 

@@ -142,7 +142,14 @@ export default function SideThreadPane(props: {
   };
 
   const promote = async () => {
-    if (!canOperate || shell === null || promoting || shell.lineage.sideChat !== true) return;
+    if (
+      !canOperate ||
+      shell === null ||
+      promoting ||
+      shell.lineage.sideChat !== true ||
+      shell.latestUserMessageAt === null
+    )
+      return;
     setPromoting(true);
     const result = await promoteSideChat({
       environmentId: parentRef.environmentId,
@@ -211,7 +218,7 @@ export default function SideThreadPane(props: {
                     variant="ghost"
                     size="icon-xs"
                     aria-label={gt("Promote side chat")}
-                    disabled={promoting}
+                    disabled={promoting || shell === null || shell.latestUserMessageAt === null}
                     onClick={() => void promote()}
                   >
                     <ArrowUpRightIcon />
@@ -219,7 +226,11 @@ export default function SideThreadPane(props: {
                 }
               />
               <TooltipPopup side="bottom">
-                <T>Promote to sidebar</T>
+                {shell?.latestUserMessageAt === null ? (
+                  <T>Available after the first message.</T>
+                ) : (
+                  <T>Promote to sidebar</T>
+                )}
               </TooltipPopup>
             </Tooltip>
           ) : null}

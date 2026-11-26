@@ -5273,16 +5273,20 @@ const makeOrchestrator = Effect.fn("orchestrationV2.Orchestrator.layer")(functio
             updatedAt: now,
           };
         }
-        case "thread.side-chat.promote":
+        case "thread.side-chat.promote": {
           if (thread.lineage.sideChat !== true) return thread;
           return {
             ...thread,
+            ...(thread.title === "Side chat"
+              ? { titleRegeneration: { requestId: command.commandId, startedAt: now } }
+              : {}),
             lineage: {
               ...thread.lineage,
               sideChat: undefined,
             },
             updatedAt: now,
           };
+        }
         case "thread.pull-request.link":
         case "thread.pull-request.unlink":
         case "thread.pull-request-link.sync": {
@@ -16011,9 +16015,14 @@ const makeOrchestrator = Effect.fn("orchestrationV2.Orchestrator.layer")(functio
           }
         }
         // The dispatch wrapper holds each side chat's lock, so none can commit after this plan.
+        const liveSideChatIds = (yield* Effect.forEach(sideChatIds, (threadId) =>
+          findThread(threadId).pipe(
+            Effect.map((thread) => (thread?.lineage.sideChat === true ? [threadId] : [])),
+          ),
+        )).flat();
         const plans = [
           yield* planDeletion(command),
-          ...(yield* Effect.forEach(sideChatIds, (threadId) =>
+          ...(yield* Effect.forEach(liveSideChatIds, (threadId) =>
             planDeletion({
               ...command,
               commandId: CommandId.make(`${command.commandId}:side-chat:${threadId}`),
@@ -16032,6 +16041,7 @@ const makeOrchestrator = Effect.fn("orchestrationV2.Orchestrator.layer")(functio
         yield* dispatchThreadMutation(command, events, effects);
         // Unarchive restores the side chats this parent's archive took, not ones archived before it.
         for (const threadId of sideChatIds) {
+          if ((yield* findThread(threadId))?.lineage.sideChat !== true) continue;
           const sideChatArchivedAt = (yield* findThread(threadId))?.archivedAt ?? null;
           const follows =
             command.type === "thread.archive"
@@ -16095,22 +16105,39 @@ const makeOrchestrator = Effect.fn("orchestrationV2.Orchestrator.layer")(functio
         }
         break;
       }
-      case "thread.side-chat.promote":
-        {
-          const sideChat = yield* projectionStore
-            .getThread(command.threadId)
-            .pipe(mapDispatchError(command));
-          yield* dispatchThreadMutation(command, events, effects);
-          if (sideChat.lineage.sideChat === true && sideChat.title === "Side chat") {
-            yield* Ref.update(effects, (existing) => [
-              ...existing,
-              pendingThreadTitleGenerationEffect(command.commandId, command.threadId, {
-                type: "regenerate",
-              }),
-            ]);
-          }
+      case "thread.side-chat.promote": {
+        const thread = yield* findThread(command.threadId);
+        if (thread?.lineage.sideChat !== true) {
+          break;
         }
+        const projection = yield* projectionStore
+          .getThreadRecords(command.threadId, ["contextTransfers"])
+          .pipe(mapDispatchError(command));
+        const needsTitle =
+          projection.thread.title === "Side chat" && projection.thread.titleRenamed !== true;
+        if (
+          projection.thread.archivedAt !== null ||
+          pendingForkTransferForThread(projection) !== undefined
+        ) {
+          return yield* new OrchestratorDispatchError({
+            commandId: command.commandId,
+            commandType: command.type,
+            cause:
+              projection.thread.archivedAt !== null
+                ? "Archived side chats cannot be promoted."
+                : "Send the side chat's first message before promoting it.",
+          });
+        }
+        yield* dispatchThreadMutation(command, events, effects);
+        if (!needsTitle) break;
+        yield* Ref.update(effects, (existing) => [
+          ...existing,
+          pendingThreadTitleGenerationEffect(command.commandId, command.threadId, {
+            type: "regenerate",
+          }),
+        ]);
         break;
+      }
       case "thread.pull-request-watch.checks-reopen":
         yield* dispatchThreadMutation(command, events, effects);
         break;
@@ -16758,6 +16785,14 @@ const makeOrchestrator = Effect.fn("orchestrationV2.Orchestrator.layer")(functio
       return yield* command.type === "thread.delete"
         ? threadDispatch.withDeletionLock(cascade)
         : cascade;
+    }
+    if (command.type === "thread.side-chat.promote") {
+      const thread = yield* findThread(command.threadId);
+      const parentThreadId =
+        thread?.lineage.sideChat === true ? thread.lineage.parentThreadId : null;
+      return yield* parentThreadId === null
+        ? dispatch
+        : threadDispatch.withLock(parentThreadId, dispatch);
     }
     // Taken before the lineage read, so a message whose read yields keeps its
     // place ahead of later messages to the same thread.

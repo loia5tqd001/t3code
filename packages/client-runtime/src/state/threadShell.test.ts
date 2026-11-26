@@ -315,6 +315,54 @@ describe("v2 thread shell lists", () => {
     registry.dispose();
   });
 
+  it("updates the parent side chat summary when a side chat starts running", () => {
+    const { registry, threads, snapshotAtom } = makeHarness();
+    const root = v2ThreadShell;
+    const sideChat = {
+      ...root,
+      id: ThreadId.make("side-chat-summary"),
+      lineage: {
+        ...root.lineage,
+        parentThreadId: root.id,
+        relationshipToParent: "fork" as const,
+        sideChat: true,
+      },
+      status: "idle" as const,
+      activityRunStatus: null,
+      latestRunId: RunId.make("side-chat-summary-run"),
+      latestRunCompletedAt: v2Now,
+      lastVisitedAt: v2Now,
+    };
+    const summary = threads.sideChatSummaryAtom({ environmentId, threadId: root.id });
+    const dispose = registry.mount(summary);
+    registry.set(snapshotAtom(environmentId), {
+      ...v2ShellSnapshot,
+      threads: [root, sideChat],
+    });
+    expect(registry.get(summary)).toBeNull();
+
+    registry.set(snapshotAtom(environmentId), {
+      ...v2ShellSnapshot,
+      threads: [
+        root,
+        {
+          ...sideChat,
+          status: "running" as const,
+          activityRunStatus: "running" as const,
+          latestRunCompletedAt: null,
+        },
+      ],
+    });
+    expect(registry.get(summary)).toEqual({
+      running: 1,
+      attention: 0,
+      completed: 0,
+      failed: 0,
+    });
+    dispose();
+    registry.dispose();
+  });
+
   it("brings a parent back from Working while a nested subagent waits for approval", () => {
     const { registry, threads, snapshotAtom } = makeHarness();
     const child = {

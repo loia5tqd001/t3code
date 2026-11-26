@@ -885,6 +885,7 @@ const askSideChat = (
 it.effect("promotes a side chat in place and stops its parent's archive cascade", () =>
   Effect.gen(function* () {
     const orchestrator = yield* Orchestrator.OrchestratorV2;
+    const eventSink = yield* EventSink.EventSinkV2;
     const parentId = ThreadId.make("side-chat-promote-parent");
     const sideChatId = ThreadId.make("side-chat-promote-child");
     yield* createParent(parentId);
@@ -905,7 +906,30 @@ it.effect("promotes a side chat in place and stops its parent's archive cascade"
       text: "Side chat work",
       stable: true,
     });
+    const sideChatBeforePromotion = yield* orchestrator.getThreadProjection(sideChatId);
+    const transfer = sideChatBeforePromotion.contextTransfers.find(
+      (candidate) => candidate.type === "fork" && candidate.status === "pending",
+    );
+    assert.isDefined(transfer);
+    yield* eventSink.write({
+      events: [
+        {
+          id: EventId.make("side-chat-promote-transfer-consumed"),
+          type: "context-transfer.updated",
+          threadId: sideChatId,
+          occurredAt: yield* DateTime.now,
+          payload: {
+            ...transfer!,
+            status: "consumed",
+            consumedAt: yield* DateTime.now,
+            updatedAt: yield* DateTime.now,
+          },
+        },
+      ],
+    });
     const before = yield* orchestrator.getThreadProjection(sideChatId);
+    assert.equal(before.thread.title, "Side chat parent fork");
+    assert.isNull(before.thread.titleRegeneration ?? null);
     assert.isTrue(before.thread.lineage.sideChat);
     assert.equal(before.thread.lineage.parentThreadId, parentId);
 
@@ -927,6 +951,93 @@ it.effect("promotes a side chat in place and stops its parent's archive cascade"
       threadId: parentId,
     });
     assert.isNull((yield* orchestrator.getThreadProjection(sideChatId)).thread.archivedAt);
+  }).pipe(Effect.provide(forkCases[0]!.layer)),
+);
+
+it.effect("keeps a promoted side chat when its parent is deleted", () =>
+  Effect.gen(function* () {
+    const orchestrator = yield* Orchestrator.OrchestratorV2;
+    const eventSink = yield* EventSink.EventSinkV2;
+    const parentId = ThreadId.make("side-chat-delete-parent");
+    const sideChatId = ThreadId.make("side-chat-delete-promoted");
+    yield* createParent(parentId);
+    yield* writeParentRun({
+      threadId: parentId,
+      runId: RunId.make("side-chat-delete-parent-run"),
+      ordinal: 1,
+      status: "completed",
+      text: "Parent work",
+      stable: true,
+    });
+    yield* forkSideChat("side-chat-delete-fork", parentId, sideChatId);
+    yield* writeParentRun({
+      threadId: sideChatId,
+      runId: RunId.make("side-chat-delete-child-run"),
+      ordinal: 1,
+      status: "completed",
+      text: "Side chat work",
+      stable: true,
+    });
+    const sideChatBeforePromotion = yield* orchestrator.getThreadProjection(sideChatId);
+    const transfer = sideChatBeforePromotion.contextTransfers.find(
+      (candidate) => candidate.type === "fork" && candidate.status === "pending",
+    );
+    assert.isDefined(transfer);
+    yield* eventSink.write({
+      events: [
+        {
+          id: EventId.make("side-chat-delete-transfer-consumed"),
+          type: "context-transfer.updated",
+          threadId: sideChatId,
+          occurredAt: yield* DateTime.now,
+          payload: {
+            ...transfer!,
+            status: "consumed",
+            consumedAt: yield* DateTime.now,
+            updatedAt: yield* DateTime.now,
+          },
+        },
+      ],
+    });
+    yield* orchestrator.dispatch({
+      type: "thread.side-chat.promote",
+      commandId: CommandId.make("side-chat-delete-promote"),
+      threadId: sideChatId,
+    });
+    yield* orchestrator.dispatch({
+      type: "thread.delete",
+      commandId: CommandId.make("side-chat-delete-parent"),
+      threadId: parentId,
+    });
+    assert.isNull((yield* orchestrator.getThreadProjection(sideChatId)).thread.deletedAt);
+  }).pipe(Effect.provide(forkCases[0]!.layer)),
+);
+
+it.effect("refuses to promote a side chat before its first turn", () =>
+  Effect.gen(function* () {
+    const orchestrator = yield* Orchestrator.OrchestratorV2;
+    const parentId = ThreadId.make("side-chat-unstarted-parent");
+    const sideChatId = ThreadId.make("side-chat-unstarted-child");
+    yield* createParent(parentId);
+    yield* writeParentRun({
+      threadId: parentId,
+      runId: RunId.make("side-chat-unstarted-parent-run"),
+      ordinal: 1,
+      status: "completed",
+      text: "Parent work",
+      stable: true,
+    });
+    yield* forkSideChat("side-chat-unstarted-fork", parentId, sideChatId);
+    const error = yield* orchestrator
+      .dispatch({
+        type: "thread.side-chat.promote",
+        commandId: CommandId.make("side-chat-unstarted-promote"),
+        threadId: sideChatId,
+      })
+      .pipe(Effect.flip);
+    assert.equal(error._tag, "OrchestratorDispatchError");
+    assert.include(String(error.cause), "first message");
+    assert.isTrue((yield* orchestrator.getThreadProjection(sideChatId)).thread.lineage.sideChat);
   }).pipe(Effect.provide(forkCases[0]!.layer)),
 );
 

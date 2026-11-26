@@ -105,3 +105,16 @@ export function resolveSidebarFolderDot(
   if (indicators.has("working")) return "working";
   return null;
 }
+
+export function sidebarIndicatorFromCounts(input: {
+  readonly attention: number;
+  readonly failed: number;
+  readonly completed: number;
+  readonly running: number;
+}): Exclude<SidebarThreadIndicator, null> | null {
+  if (input.attention > 0) return "attention";
+  if (input.failed > 0) return "failed";
+  if (input.completed > 0) return "unread";
+  if (input.running > 0) return "working";
+  return null;
+}

@@ -105,6 +105,7 @@ import {
 import {
   hasUnseenCompletion,
   resolveSidebarRowStatus,
+  sidebarIndicatorFromCounts,
 } from "@t3tools/client-runtime/state/thread-status";
 import { resolveLocalCheckoutBranchMismatch } from "../BranchToolbar.logic";
 import {
@@ -1246,13 +1247,13 @@ const SidebarThreadRow = memo(function SidebarThreadRow(props: SidebarThreadRowP
               data-testid={`sidebar-side-chats-${thread.id}`}
               className={cn(
                 "inline-flex shrink-0 items-center gap-1 rounded-sm bg-sidebar-row-hover px-1 text-3xs font-medium",
-                sideChatSummary.attention > 0
+                sidebarIndicatorFromCounts(sideChatSummary) === "attention"
                   ? "text-warning-foreground"
-                  : sideChatSummary.failed > 0
+                  : sidebarIndicatorFromCounts(sideChatSummary) === "failed"
                     ? "text-error-foreground"
-                    : sideChatSummary.running > 0
-                      ? "text-info-foreground"
-                      : "text-success-foreground",
+                    : sidebarIndicatorFromCounts(sideChatSummary) === "unread"
+                      ? "text-success-foreground"
+                      : "text-info-foreground",
               )}
             />
           }
@@ -1762,7 +1763,11 @@ const SidebarThreadRow = memo(function SidebarThreadRow(props: SidebarThreadRowP
               )}
               {props.sweepAction !== null ? dragDestination : null}
             </div>
-            <div className="mt-1 flex min-w-0 items-center gap-1.5">
+            <div
+              data-testid="sidebar-row-card-title-row"
+              className="mt-1 flex min-w-0 items-center gap-1.5"
+              style={{ height: "1.25rem" }}
+            >
               {title}
               {sideChatIndicator}
               {isRegeneratingTitle ? (

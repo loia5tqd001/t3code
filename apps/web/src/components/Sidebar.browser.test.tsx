@@ -244,7 +244,8 @@ describe("sidebar side chat status", () => {
         <Sidebar routeReveal={{ observedKey: null, pendingKey: null }} />
       </SidebarProvider>,
     );
-    const card = screen.getByTestId("sidebar-row-card-body");
+    const card = screen.getByTestId("sidebar-row-card-title-row");
+    expect(getComputedStyle(await card.element()).height).toBe("20px");
     await expect
       .element(screen.getByTestId(`sidebar-side-chats-${parent.id}`))
       .not.toBeInTheDocument();
@@ -266,9 +267,7 @@ describe("sidebar side chat status", () => {
     );
     const sideChats = screen.getByTestId(`sidebar-side-chats-${parent.id}`);
     await expect.element(sideChats).toBeInTheDocument();
-    expect((await sideChats.element()).getBoundingClientRect().height).toBeLessThanOrEqual(
-      (await card.element()).getBoundingClientRect().height,
-    );
+    expect(getComputedStyle(await card.element()).height).toBe("20px");
   });
 });
 

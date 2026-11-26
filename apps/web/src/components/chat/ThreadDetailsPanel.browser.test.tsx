@@ -335,7 +335,24 @@ it("disables fork until the thread has a stable run", async () => {
   using fixture = setup({ workspaceRoot: "/work/plain", folder: "/work/plain" });
   await using screen = await render(<Panel fixture={fixture} actions={{ onFork: vi.fn() }} />);
 
+  const forkTooltipTarget = screen.getByRole("group", { name: "Fork chat" });
   await expect.element(screen.getByRole("button", { name: "Fork chat" })).toBeDisabled();
+  await userEvent.hover(forkTooltipTarget);
+  await vi.waitFor(() =>
+    expect(document.querySelector('[data-slot="tooltip-popup"]')?.textContent).toContain(
+      "Available after the first run finishes.",
+    ),
+  );
+  await userEvent.unhover(forkTooltipTarget);
+  forkTooltipTarget.element().focus();
+  await expect.element(forkTooltipTarget).toHaveFocus();
+  await expect.element(page.getByText("Available after the first run finishes.")).toBeVisible();
+
+  await screen.rerender(<Panel fixture={fixture} actions={{ onFork: vi.fn(), canFork: true }} />);
+  const enabledFork = screen.getByRole("button", { name: "Fork chat" });
+  await expect.element(enabledFork).toBeEnabled();
+  await userEvent.hover(enabledFork);
+  await expect.element(page.getByText("Fork chat", { exact: true })).toBeVisible();
 });
 
 it("omits side chat when the thread cannot start one", async () => {

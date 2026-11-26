@@ -45,6 +45,7 @@ import {
   THREAD_DETAILS_PANEL_LABEL_CLASS,
 } from "./threadDetailsPanelStyles";
 import { Menu, MenuPopup } from "../ui/menu";
+import { Tooltip, TooltipPopup, TooltipTrigger } from "../ui/tooltip";
 
 interface ThreadDetailsPanelProps extends Pick<
   ComponentProps<typeof ThreadDetailsCard>,
@@ -199,17 +200,33 @@ export function ThreadDetailsPanel(props: ThreadDetailsPanelProps) {
               </ThreadDetailsControl>
             ) : null}
             {props.onFork ? (
-              <ThreadDetailsControl
-                size="icon-xs"
-                variant="ghost"
-                part="icon"
-                aria-label={gt("Fork chat")}
-                title={gt("Fork chat")}
-                disabled={!props.canFork}
-                onClick={props.onFork}
-              >
-                <GitForkIcon className="size-3.5" aria-hidden />
-              </ThreadDetailsControl>
+              <Tooltip>
+                <TooltipTrigger
+                  render={
+                    <span
+                      className="inline-flex"
+                      tabIndex={props.canFork ? undefined : 0}
+                      role={props.canFork ? undefined : "group"}
+                      aria-disabled={props.canFork ? undefined : true}
+                      aria-label={props.canFork ? undefined : gt("Fork chat")}
+                    />
+                  }
+                >
+                  <ThreadDetailsControl
+                    size="icon-xs"
+                    variant="ghost"
+                    part="icon"
+                    aria-label={gt("Fork chat")}
+                    disabled={!props.canFork}
+                    onClick={props.onFork}
+                  >
+                    <GitForkIcon className="size-3.5" aria-hidden />
+                  </ThreadDetailsControl>
+                </TooltipTrigger>
+                <TooltipPopup>
+                  {props.canFork ? gt("Fork chat") : gt("Available after the first run finishes.")}
+                </TooltipPopup>
+              </Tooltip>
             ) : null}
           </>
         );

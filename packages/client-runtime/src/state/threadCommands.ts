@@ -48,6 +48,7 @@ import {
   setThreadInteractionMode,
   setThreadRuntimeMode,
   pinThread,
+  promoteSideChat,
   prepareThreadWorkspace,
   reorderPinnedThread,
   reorderActiveThread,
@@ -424,6 +425,12 @@ export function createThreadEnvironmentAtoms<R, E>(
         mode: "serial",
         key: ({ environmentId, input }) => JSON.stringify([environmentId, input.sourceThreadId]),
       },
+    }),
+    promoteSideChat: createEnvironmentCommand(runtime, {
+      label: "environment-data:commands:thread:promote-side-chat",
+      execute: promoteSideChat,
+      scheduler,
+      concurrency,
     }),
     mergeBack: createEnvironmentCommand(runtime, {
       label: "environment-data:commands:thread:merge-back",

@@ -26,6 +26,7 @@ import { type EnvironmentThreadSearchMatch } from "@t3tools/client-runtime/state
 import {
   formatWorkingDurationLabel,
   resolveThreadProviderStack,
+  threadRuntimeIsActive,
 } from "@t3tools/client-runtime/state/models";
 import { scopeThreadRef, scopedThreadKey } from "@t3tools/client-runtime/environment";
 import { toServerClock } from "@t3tools/client-runtime/clock";
@@ -51,6 +52,7 @@ import {
   FolderGit2Icon,
   GitBranchIcon,
   MessageCircleQuestionIcon,
+  MessagesSquareIcon,
   PinIcon,
   PinOffIcon,
   ShieldQuestionIcon,
@@ -115,7 +117,8 @@ import {
   ThreadSearchPullRequestNumber,
 } from "../ThreadStatusIndicators";
 import { pickSnoozePreset, resolveSnoozePresets, type SnoozePreset } from "../Sidebar.snooze";
-import { useThreadShell } from "../../state/entities";
+import { useSideChats, useThreadShell } from "../../state/entities";
+import type { EnvironmentThreadShell } from "@t3tools/client-runtime/state/models";
 import { ProjectFavicon, type ProjectFaviconProject } from "../ProjectFavicon";
 import { ThreadSearchMatchExcerpt } from "../ThreadSearchMatch";
 import { makeWorkspaceFileDropHandlers } from "../chat/workspaceFileDrop";
@@ -483,6 +486,44 @@ export const draftPenClassName = "size-3 shrink-0 text-warning-foreground";
 export const SIDEBAR_SORTABLE_DRAG_DISABLED = { draggable: true } as const;
 const SIDEBAR_SORTABLE_DRAG_ENABLED = { draggable: false } as const;
 
+export type SideChatSummary = {
+  readonly running: number;
+  readonly attention: number;
+  readonly completed: number;
+  readonly failed: number;
+};
+
+export function summarizeSideChats(
+  threads: ReadonlyArray<
+    Pick<
+      EnvironmentThreadShell,
+      | "hasPendingApprovals"
+      | "hasPendingUserInput"
+      | "hasActionableProposedPlan"
+      | "interactionMode"
+      | "pendingSubagentRequest"
+      | "runtime"
+      | "latestRun"
+      | "lastVisitedAt"
+    >
+  >,
+): SideChatSummary | null {
+  if (threads.length === 0) return null;
+  let running = 0;
+  let attention = 0;
+  let completed = 0;
+  let failed = 0;
+  for (const thread of threads) {
+    if (thread.hasPendingApprovals || thread.hasPendingUserInput) attention++;
+    else if (thread.runtime?.status === "failed") failed++;
+    else if (threadRuntimeIsActive(thread.runtime)) running++;
+    else if (hasUnseenCompletion(thread)) completed++;
+  }
+  return running + attention + completed + failed === 0
+    ? null
+    : { running, attention, completed, failed };
+}
+
 // Takes the row's props rather than a render function: a closure from the
 // sidebar body is new on every sidebar render, which rebuilt the bag and
 // re-rendered every memoized row with it.
@@ -733,6 +774,7 @@ const SidebarThreadRow = memo(function SidebarThreadRow(props: SidebarThreadRowP
   const terminalStatus = terminalStatusFromRunningIds(runningTerminalIds, messages);
   const terminalProcessCount = runningTerminalIds.length;
   const hasUnsentDraft = useThreadHasUnsentDraft(threadRef) && !props.isRouteThread;
+  const sideChatSummary = summarizeSideChats(useSideChats(threadRef));
   const handleDiscardDraftClick = (event: ReactMouseEvent) => {
     event.preventDefault();
     event.stopPropagation();
@@ -1222,6 +1264,50 @@ const SidebarThreadRow = memo(function SidebarThreadRow(props: SidebarThreadRowP
       </TooltipPopup>
     </Tooltip>
   ) : null;
+  const sideChatIndicator =
+    sideChatSummary === null ? null : (
+      <Tooltip>
+        <TooltipTrigger
+          render={
+            <span
+              role="img"
+              aria-label={gt(
+                "{count, plural, one {{count} side chat} other {{count} side chats}}",
+                {
+                  count:
+                    sideChatSummary.running +
+                    sideChatSummary.attention +
+                    sideChatSummary.completed +
+                    sideChatSummary.failed,
+                },
+              )}
+              data-testid={`sidebar-side-chats-${thread.id}`}
+              className={cn(
+                "inline-flex shrink-0 items-center gap-1 rounded-sm bg-sidebar-row-hover px-1 text-3xs font-medium",
+                sideChatSummary.attention > 0
+                  ? "text-warning-foreground"
+                  : sideChatSummary.failed > 0
+                    ? "text-error-foreground"
+                    : sideChatSummary.running > 0
+                      ? "text-info-foreground"
+                      : "text-success-foreground",
+              )}
+            />
+          }
+        >
+          <MessagesSquareIcon aria-hidden className="size-3" />
+          <span>
+            {sideChatSummary.running +
+              sideChatSummary.attention +
+              sideChatSummary.completed +
+              sideChatSummary.failed}
+          </span>
+        </TooltipTrigger>
+        <TooltipPopup side="top">
+          <T>Side chat status</T>
+        </TooltipPopup>
+      </Tooltip>
+    );
   const showPin =
     props.isPinned && (!sortable?.isDragging || (props.dragOverPinned && props.dropVerb === null));
   const pinIndicator = showPin ? (
@@ -1269,6 +1355,7 @@ const SidebarThreadRow = memo(function SidebarThreadRow(props: SidebarThreadRowP
     runningTerminalIds.length === 0;
   const metaLine = metaLineEmpty ? null : (
     <div className="mt-0.5 flex min-w-0 items-center gap-1.5 text-secondary-label text-xs">
+      {sideChatIndicator}
       {props.environmentLabel !== null ? (
         <>
           <EnvironmentMachineIcon
@@ -1557,6 +1644,7 @@ const SidebarThreadRow = memo(function SidebarThreadRow(props: SidebarThreadRowP
           >
             <div className="flex h-5 min-w-0 items-center gap-1.5">
               {draftIndicator}
+              {sideChatIndicator}
               {props.project ? (
                 <ProjectFavicon project={props.project} className="size-4 shrink-0" />
               ) : null}

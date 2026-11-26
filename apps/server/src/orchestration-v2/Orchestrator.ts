@@ -668,6 +668,7 @@ function commandThreadId(command: OrchestrationV2ServerCommand): ThreadId {
     case "thread.mark-unread":
     case "message.saved.set":
     case "thread.metadata.update":
+    case "thread.side-chat.promote":
     case "thread.pull-request.link":
     case "thread.pull-request.unlink":
     case "thread.pull-request-link.sync":
@@ -4493,6 +4494,7 @@ const makeOrchestrator = Effect.fn("orchestrationV2.Orchestrator.layer")(functio
           | "thread.active.reorder"
           | "thread.mark-unread"
           | "thread.metadata.update"
+          | "thread.side-chat.promote"
           | "thread.pull-request.link"
           | "thread.pull-request.unlink"
           | "thread.pull-request-link.sync"
@@ -5271,6 +5273,16 @@ const makeOrchestrator = Effect.fn("orchestrationV2.Orchestrator.layer")(functio
             updatedAt: now,
           };
         }
+        case "thread.side-chat.promote":
+          if (thread.lineage.sideChat !== true) return thread;
+          return {
+            ...thread,
+            lineage: {
+              ...thread.lineage,
+              sideChat: undefined,
+            },
+            updatedAt: now,
+          };
         case "thread.pull-request.link":
         case "thread.pull-request.unlink":
         case "thread.pull-request-link.sync": {
@@ -5655,6 +5667,7 @@ const makeOrchestrator = Effect.fn("orchestrationV2.Orchestrator.layer")(functio
         case "thread.mark-unread":
           return "thread.marked-unread" as const;
         case "thread.metadata.update":
+        case "thread.side-chat.promote":
         case "thread.title.regeneration.complete":
           return "thread.metadata-updated" as const;
         case "thread.pull-request.link":
@@ -16082,6 +16095,22 @@ const makeOrchestrator = Effect.fn("orchestrationV2.Orchestrator.layer")(functio
         }
         break;
       }
+      case "thread.side-chat.promote":
+        {
+          const sideChat = yield* projectionStore
+            .getThread(command.threadId)
+            .pipe(mapDispatchError(command));
+          yield* dispatchThreadMutation(command, events, effects);
+          if (sideChat.lineage.sideChat === true && sideChat.title === "Side chat") {
+            yield* Ref.update(effects, (existing) => [
+              ...existing,
+              pendingThreadTitleGenerationEffect(command.commandId, command.threadId, {
+                type: "regenerate",
+              }),
+            ]);
+          }
+        }
+        break;
       case "thread.pull-request-watch.checks-reopen":
         yield* dispatchThreadMutation(command, events, effects);
         break;

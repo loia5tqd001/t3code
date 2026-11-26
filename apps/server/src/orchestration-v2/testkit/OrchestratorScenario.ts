@@ -159,6 +159,7 @@ function commandThreadIds(command: OrchestrationV2Command): ReadonlyArray<Thread
     case "thread.mark-unread":
     case "message.saved.set":
     case "thread.metadata.update":
+    case "thread.side-chat.promote":
     case "thread.pull-request.link":
     case "thread.pull-request.unlink":
     case "thread.pull-request-link.sync":

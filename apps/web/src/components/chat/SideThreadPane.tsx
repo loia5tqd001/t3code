@@ -8,8 +8,9 @@ import {
 } from "@t3tools/client-runtime/state/runtime";
 import { AuthOrchestrationOperateScope, type ScopedThreadRef } from "@t3tools/contracts";
 import { threadContextRecord } from "@t3tools/shared/composerContextReferences";
+import { useRouter } from "@tanstack/react-router";
 import { T, useGT } from "gt-react";
-import { Trash2Icon, XIcon } from "lucide-react";
+import { ArrowUpRightIcon, Trash2Icon, XIcon } from "lucide-react";
 import { useEffect, useState } from "react";
 
 import { useComposerDraftStore } from "../../composerDraftStore";
@@ -19,11 +20,16 @@ import { releaseComposerDraftUploads } from "../../lib/composerDraftUploads";
 import type { SideChatParentPanel } from "../../lib/sideChatPane";
 import { readLocalApi } from "../../localApi";
 import { hostRightPanel, type ThreadSurface, useRightPanelStore } from "../../rightPanelStore";
-import { useQuietThreadProjection, useQuietThreadShell } from "../../state/entities";
+import {
+  useQuietThreadProjection,
+  useQuietThreadShell,
+  useServerConfigs,
+} from "../../state/entities";
 import { useEnvironmentScope } from "../../state/session";
 import { useEnvironmentShellStatus } from "../../state/shell";
 import { threadEnvironment, useEnvironmentThread } from "../../state/threads";
 import {
+  buildThreadRouteParams,
   isThreadRouteSnapshotAuthoritative,
   resolveThreadRouteRenderState,
 } from "../../threadRoutes";
@@ -50,6 +56,7 @@ export default function SideThreadPane(props: {
   const { parentRef, surface } = props;
   const { threadId } = surface;
   const gt = useGT();
+  const router = useRouter();
   const threadRef = scopeThreadRef(parentRef.environmentId, threadId);
   // oxlint-disable-next-line t3code/no-unreasoned-state-sync -- registers the parent panel as host in the panel store
   useEffect(
@@ -79,9 +86,14 @@ export default function SideThreadPane(props: {
   const kind = sideThreadKindOf(thread) ?? "subagent";
   const isSideChat = kind === "side-chat";
   const canOperate = useEnvironmentScope(parentRef.environmentId, AuthOrchestrationOperateScope);
+  const serverConfig = useServerConfigs().get(parentRef.environmentId);
   const deleteThread = useAtomCommand(threadEnvironment.delete, { reportFailure: false });
+  const promoteSideChat = useAtomCommand(threadEnvironment.promoteSideChat, {
+    reportFailure: false,
+  });
   const confirmThreadDelete = useClientSettings((settings) => settings.confirmThreadDelete);
   const [deleting, setDeleting] = useState(false);
+  const [promoting, setPromoting] = useState(false);
   // Closing an unused side chat deletes it, which would leave the link unreadable.
   const canAddToChat = shell !== null && shell.latestUserMessageAt !== null;
   const addToChat = () => {
@@ -129,6 +141,31 @@ export default function SideThreadPane(props: {
     }
   };
 
+  const promote = async () => {
+    if (!canOperate || shell === null || promoting || shell.lineage.sideChat !== true) return;
+    setPromoting(true);
+    const result = await promoteSideChat({
+      environmentId: parentRef.environmentId,
+      input: { threadId },
+    });
+    setPromoting(false);
+    if (result._tag === "Failure") {
+      if (isAtomCommandInterrupted(result)) return;
+      const error = squashAtomCommandFailure(result);
+      toastManager.add({
+        type: "error",
+        title: gt("Could not promote the side chat"),
+        ...(error instanceof Error ? { description: error.message } : {}),
+      });
+      return;
+    }
+    useRightPanelStore.getState().closeSurface(parentRef, surface.id);
+    await router.navigate({
+      to: "/$environmentId/$threadId",
+      params: buildThreadRouteParams(threadRef),
+    });
+  };
+
   const title =
     thread === null
       ? isSideChat
@@ -166,6 +203,26 @@ export default function SideThreadPane(props: {
                 : gt("Available after the first message.")}
             </TooltipPopup>
           </Tooltip>
+          {canOperate && serverConfig?.environment.capabilities.sideChatPromotion === true ? (
+            <Tooltip>
+              <TooltipTrigger
+                render={
+                  <Button
+                    variant="ghost"
+                    size="icon-xs"
+                    aria-label={gt("Promote side chat")}
+                    disabled={promoting}
+                    onClick={() => void promote()}
+                  >
+                    <ArrowUpRightIcon />
+                  </Button>
+                }
+              />
+              <TooltipPopup side="bottom">
+                <T>Promote to sidebar</T>
+              </TooltipPopup>
+            </Tooltip>
+          ) : null}
           <Button
             variant="ghost"
             size="icon-xs"

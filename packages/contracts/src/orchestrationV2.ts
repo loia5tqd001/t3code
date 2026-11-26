@@ -3525,6 +3525,11 @@ export const OrchestrationV2Command = Schema.Union([
     linkedPullRequest: Schema.optional(Schema.NullOr(ThreadLinkedPullRequest)),
   }),
   Schema.Struct({
+    type: Schema.Literal("thread.side-chat.promote"),
+    commandId: CommandId,
+    threadId: ThreadId,
+  }),
+  Schema.Struct({
     type: Schema.Literal("thread.pull-request.link"),
     commandId: CommandId,
     threadId: ThreadId,

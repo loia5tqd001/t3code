@@ -70,6 +70,7 @@ const descriptor = {
   capabilities: {
     repositoryIdentity: true,
     sideChats: true,
+    sideChatPromotion: true,
     freshContext: true,
     fileAttachments: { maxUploadBytes: 10_000_000 },
   },

@@ -882,6 +882,54 @@ const askSideChat = (
     });
   });
 
+it.effect("promotes a side chat in place and stops its parent's archive cascade", () =>
+  Effect.gen(function* () {
+    const orchestrator = yield* Orchestrator.OrchestratorV2;
+    const parentId = ThreadId.make("side-chat-promote-parent");
+    const sideChatId = ThreadId.make("side-chat-promote-child");
+    yield* createParent(parentId);
+    yield* writeParentRun({
+      threadId: parentId,
+      runId: RunId.make("side-chat-promote-parent-run"),
+      ordinal: 1,
+      status: "completed",
+      text: "Parent work",
+      stable: true,
+    });
+    yield* forkSideChat("side-chat-promote-fork", parentId, sideChatId);
+    yield* writeParentRun({
+      threadId: sideChatId,
+      runId: RunId.make("side-chat-promote-child-run"),
+      ordinal: 1,
+      status: "completed",
+      text: "Side chat work",
+      stable: true,
+    });
+    const before = yield* orchestrator.getThreadProjection(sideChatId);
+    assert.isTrue(before.thread.lineage.sideChat);
+    assert.equal(before.thread.lineage.parentThreadId, parentId);
+
+    yield* orchestrator.dispatch({
+      type: "thread.side-chat.promote",
+      commandId: CommandId.make("side-chat-promote"),
+      threadId: sideChatId,
+    });
+    const promoted = yield* orchestrator.getThreadProjection(sideChatId);
+    assert.isUndefined(promoted.thread.lineage.sideChat);
+    assert.equal(promoted.thread.lineage.parentThreadId, parentId);
+    assert.equal(promoted.thread.lineage.relationshipToParent, "fork");
+    assert.equal(promoted.thread.lineage.rootThreadId, parentId);
+    assert.equal(promoted.runs.length, before.runs.length);
+
+    yield* orchestrator.dispatch({
+      type: "thread.archive",
+      commandId: CommandId.make("side-chat-promote-archive-parent"),
+      threadId: parentId,
+    });
+    assert.isNull((yield* orchestrator.getThreadProjection(sideChatId)).thread.archivedAt);
+  }).pipe(Effect.provide(forkCases[0]!.layer)),
+);
+
 it.effect("resolves an explicit checkpoint fork to its source run", () =>
   Effect.gen(function* () {
     const orchestrator = yield* Orchestrator.OrchestratorV2;

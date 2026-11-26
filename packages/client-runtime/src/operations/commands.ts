@@ -105,6 +105,8 @@ export interface ThreadCommandInput extends CommandMetadata {
   readonly threadId: ThreadId;
 }
 
+export type PromoteSideChatInput = ThreadCommandInput;
+
 export interface DeleteThreadInput extends ThreadCommandInput {
   /** The server deletes only a thread with no runs and no messages. */
   readonly onlyIfUnused?: boolean;
@@ -738,6 +740,16 @@ export const visitThread = Effect.fn("EnvironmentCommands.visitThread")(function
     visitedAt: input.visitedAt,
     ...(input.opened ? { opened: true } : {}),
     ...(input.searchQuery ? { searchQuery: input.searchQuery } : {}),
+  });
+});
+
+export const promoteSideChat = Effect.fn("EnvironmentCommands.promoteSideChat")(function* (
+  input: PromoteSideChatInput,
+) {
+  return yield* dispatch({
+    type: "thread.side-chat.promote",
+    commandId: yield* allocateCommandId(input),
+    threadId: input.threadId,
   });
 });
 

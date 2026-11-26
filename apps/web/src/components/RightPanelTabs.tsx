@@ -739,10 +739,11 @@ const SIDE_CHAT_STATE_LABELS = {
   "needs approval": msg("needs approval"),
   "needs input": msg("needs input"),
   running: msg("running", { $context: "side chat status" }),
+  completed: msg("completed", { $context: "side chat status" }),
 } as const;
 
 /** What a side chat tab's dot shows and its title's accessible name says. */
-function sideChatTabState(shell: EnvironmentThreadShell | null) {
+export function sideChatTabState(shell: EnvironmentThreadShell | null) {
   if (shell === null) return null;
   if (shell.hasPendingApprovals || shell.pendingSubagentRequest === "approval") {
     return "needs approval";
@@ -750,7 +751,14 @@ function sideChatTabState(shell: EnvironmentThreadShell | null) {
   if (shell.hasPendingUserInput || shell.pendingSubagentRequest === "user_input") {
     return "needs input";
   }
-  return threadRuntimeIsActive(shell.runtime) ? "running" : null;
+  if (threadRuntimeIsActive(shell.runtime)) return "running";
+  return shell.latestRun?.completedAt !== null &&
+    shell.latestRun?.completedAt !== undefined &&
+    (shell.lastVisitedAt === undefined ||
+      shell.lastVisitedAt === null ||
+      Date.parse(shell.latestRun.completedAt) > Date.parse(shell.lastVisitedAt))
+    ? "completed"
+    : null;
 }
 
 // Static dots: a side chat or subagent tab can stay open for a whole run.
@@ -767,7 +775,11 @@ function SideChatTabIcon(props: { environmentId: EnvironmentId | null; threadId:
         <span
           className={cn(
             "absolute -top-0.5 -right-0.5 size-1.5 rounded-full",
-            state === "running" ? "bg-muted-foreground" : "bg-info",
+            state === "running"
+              ? "bg-muted-foreground"
+              : state === "completed"
+                ? "bg-success"
+                : "bg-info",
           )}
           aria-hidden
         />

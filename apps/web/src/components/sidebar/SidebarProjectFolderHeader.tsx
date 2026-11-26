@@ -9,7 +9,11 @@ import { cn } from "~/lib/utils";
 import { contextMenuSourceOf } from "../../contextMenuSource";
 import type { SidebarProjectSnapshot } from "../../sidebarProjectGrouping";
 import { useUiStateStore } from "../../uiStateStore";
-import { resolveSidebarFolderDot, resolveThreadLastVisitedAt } from "../Sidebar.logic";
+import {
+  resolveSidebarFolderDot,
+  resolveProjectFolderSideChatDot,
+  resolveThreadLastVisitedAt,
+} from "../Sidebar.logic";
 import { ProjectFavicon } from "../ProjectFavicon";
 import { Button } from "../ui/button";
 import { Tooltip, TooltipPopup, TooltipTrigger } from "../ui/tooltip";
@@ -42,6 +46,7 @@ export const SidebarProjectFolderHeader = memo(function SidebarProjectFolderHead
   group: SidebarProjectSnapshot;
   collapsed: boolean;
   hiddenThreads: readonly EnvironmentThreadShell[];
+  sideChats: readonly EnvironmentThreadShell[];
   onToggle: (group: SidebarProjectSnapshot) => void;
   onNewThread: (group: SidebarProjectSnapshot) => void;
   onContextMenu: (
@@ -52,10 +57,10 @@ export const SidebarProjectFolderHeader = memo(function SidebarProjectFolderHead
 }) {
   const gt = useGT();
   const m = useMessages();
-  const { group, collapsed, hiddenThreads } = props;
+  const { group, collapsed, hiddenThreads, sideChats } = props;
   const rowId = sidebarFolderRowId(group.projectKey);
   const localLastVisitedAtById = useUiStateStore((state) => state.threadLastVisitedAtById);
-  const dot = collapsed
+  const threadDot = collapsed
     ? resolveSidebarFolderDot(
         hiddenThreads.map((thread) => ({
           ...thread,
@@ -68,9 +73,21 @@ export const SidebarProjectFolderHeader = memo(function SidebarProjectFolderHead
         })),
       )
     : null;
+  const sideChatDot = resolveProjectFolderSideChatDot(group.memberProjectRefs, sideChats);
+  const dot =
+    threadDot === "attention" || sideChatDot === "attention"
+      ? "attention"
+      : threadDot === "failed" || sideChatDot === "failed"
+        ? "failed"
+        : threadDot === "unread" || sideChatDot === "unread"
+          ? "unread"
+          : threadDot === "working" || sideChatDot === "working"
+            ? "working"
+            : null;
   return (
     <li
       data-testid="sidebar-project-folder"
+      data-project-folder-side-chat-state={sideChatDot ?? "none"}
       className="group/project-folder relative mt-2 list-none first:mt-0"
     >
       <button

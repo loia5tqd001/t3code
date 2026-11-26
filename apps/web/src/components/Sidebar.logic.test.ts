@@ -38,6 +38,7 @@ import {
   resolveSidebarDropVerb,
   groupSidebarThreadsByProject,
   resolveSidebarFolderDot,
+  resolveProjectFolderSideChatDot,
   sidebarFolderExpansionKeys,
   withoutRemovedCheckout,
 } from "./Sidebar.logic";
@@ -1738,6 +1739,67 @@ describe("resolveSidebarFolderDot", () => {
     expect(resolveSidebarFolderDot([idle, working])).toBe("working");
     expect(resolveSidebarFolderDot([working, unread])).toBe("unread");
     expect(resolveSidebarFolderDot([unread, limited])).toBe("attention");
+  });
+});
+
+describe("resolveProjectFolderSideChatDot", () => {
+  const project = { environmentId: localEnvironmentId, projectId: "project-1" };
+  const idle = {
+    environmentId: localEnvironmentId,
+    projectId: ProjectId.make("project-1"),
+    archivedAt: null,
+    hasActionableProposedPlan: false,
+    hasPendingApprovals: false,
+    hasPendingUserInput: false,
+    interactionMode: "default" as const,
+    latestRun: makeLatestRun(),
+    lastVisitedAt: "2026-03-09T10:06:00.000Z",
+    runtime: null,
+  };
+  const runtime = {
+    status: "running" as const,
+    activeRunId: null,
+    providerInstanceId: ProviderInstanceId.make("codex"),
+    providerName: "Codex",
+    lastError: null,
+    updatedAt: "2026-03-09T10:00:00.000Z",
+  };
+
+  it("includes running, attention, failed, and unseen side chats", () => {
+    expect([project]).toHaveLength(1);
+    expect(resolveProjectFolderSideChatDot([project], [{ ...idle, runtime }])).toBe("working");
+    expect(
+      resolveProjectFolderSideChatDot([project], [{ ...idle, runtime, hasPendingApprovals: true }]),
+    ).toBe("attention");
+    expect(
+      resolveProjectFolderSideChatDot(
+        [project],
+        [{ ...idle, runtime: { ...runtime, status: "failed", lastError: "failed" } }],
+      ),
+    ).toBe("failed");
+    expect(
+      resolveProjectFolderSideChatDot(
+        [project],
+        [{ ...idle, lastVisitedAt: "2026-03-09T10:04:00.000Z" }],
+      ),
+    ).toBe("unread");
+  });
+
+  it("ignores seen, archived, and other-project side chats", () => {
+    expect(resolveProjectFolderSideChatDot([project], [idle])).toBeNull();
+    expect(
+      resolveProjectFolderSideChatDot(
+        [project],
+        [
+          { ...idle, archivedAt: "2026-03-09T10:00:00.000Z", runtime },
+          {
+            ...idle,
+            projectId: ProjectId.make("other-project"),
+            runtime: { ...runtime, status: "failed", lastError: "failed" },
+          },
+        ],
+      ),
+    ).toBeNull();
   });
 });
 

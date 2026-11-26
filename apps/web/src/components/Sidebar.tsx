@@ -560,6 +560,7 @@ function useSidebarThreads(input: {
               : EMPTY_THREADS,
           };
         });
+  const projectFolderSideChats = threads.filter((thread) => thread.lineage.sideChat === true);
   const orderedThreads = [
     ...pinnedThreads,
     ...(projectFolders === null
@@ -606,6 +607,7 @@ function useSidebarThreads(input: {
     workingShelfExpanded,
     toggleWorkingShelf: () => setWorkingShelfExpanded((value) => !value),
     projectFolders,
+    projectFolderSideChats,
     toggleProjectFolder: (group: SidebarProjectSnapshot) => {
       const keys = sidebarFolderExpansionKeys(group);
       setProjectExpanded(keys, !resolveProjectExpanded(projectExpandedById, keys));
@@ -1338,6 +1340,7 @@ export default function Sidebar({ routeReveal }: { routeReveal: SidebarRouteReve
     workingShelfExpanded,
     toggleWorkingShelf,
     projectFolders,
+    projectFolderSideChats,
     toggleProjectFolder,
     renderedSettledThreads,
     visibleSnoozedThreads,
@@ -3626,6 +3629,7 @@ export default function Sidebar({ routeReveal }: { routeReveal: SidebarRouteReve
                                 group={folder.group}
                                 collapsed={folder.collapsed}
                                 hiddenThreads={folder.hiddenThreads}
+                                sideChats={projectFolderSideChats}
                                 onToggle={toggleProjectFolder}
                                 onNewThread={startThreadInProjectFolder}
                                 onContextMenu={handleProjectFolderContextMenu}

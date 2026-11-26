@@ -9,6 +9,7 @@ import {
   EnvironmentId,
   type LocalApi,
   ProjectId,
+  ProviderInstanceId,
   ThreadId,
   type ScopedThreadRef,
 } from "@t3tools/contracts";
@@ -459,6 +460,70 @@ describe("sidebar environment labels", () => {
     const firstRow = screen.getByTestId("sidebar-row-folder").filter({ hasText: "Thread 0" });
     expect((await firstRow.element()).className).not.toContain("ps-9");
     await expect.element(screen.getByText("#42")).not.toBeInTheDocument();
+  });
+
+  it("shows a side chat's status on its project folder even while the folder is open", async () => {
+    using stack = new DisposableStack();
+    const previousSettings = getClientSettings();
+    stack.defer(() => __setClientSettingsForTests(previousSettings));
+    __setClientSettingsForTests({
+      ...DEFAULT_CLIENT_SETTINGS,
+      boringSidebarEnabled: true,
+    });
+    const activeProject = project("active");
+    const parent = threadShell(activeProject.id, 0);
+    const sideChat = makeThreadFixture({
+      ...parent,
+      id: ThreadId.make("side-chat-running"),
+      title: "Side chat",
+      lineage: {
+        rootThreadId: parent.id,
+        parentThreadId: parent.id,
+        relationshipToParent: "fork",
+        sideChat: true,
+      },
+      runtime: {
+        status: "running",
+        activeRunId: null,
+        providerInstanceId: ProviderInstanceId.make("codex"),
+        providerName: null,
+        lastError: null,
+        updatedAt: "2026-01-01T00:00:00.000Z",
+      },
+    });
+    vi.mocked(useProjects).mockReturnValue([activeProject]);
+    vi.mocked(useQuietThreadShells).mockReturnValue([parent, sideChat]);
+    vi.mocked(useThreadRouteTarget).mockReturnValue({
+      kind: "server",
+      threadRef: scopeThreadRef(parent.environmentId, parent.id),
+    });
+    vi.mocked(useHandleNewThread).mockReturnValue({
+      activeDraftThread: null,
+      activeThread: null,
+      defaultProjectRef: {
+        environmentId: activeProject.environmentId,
+        projectId: activeProject.id,
+      },
+      defaultProjectFallbackReady: true,
+      handleNewThread: vi.fn().mockResolvedValue(null),
+      routeDraftId: null,
+      routeThreadRef: scopeThreadRef(parent.environmentId, parent.id),
+    });
+
+    await using screen = await render(
+      <SidebarProvider>
+        <Sidebar routeReveal={{ observedKey: null, pendingKey: null }} />
+      </SidebarProvider>,
+    );
+
+    const folder = screen.getByTestId("sidebar-project-folder");
+    await expect.element(folder).toHaveAttribute("data-project-folder-side-chat-state", "working");
+    await expect.element(folder.getByText(", working", { exact: true })).toBeVisible();
+
+    const folderButton = folder.getByRole("button", { name: /^active/ });
+    await userEvent.click(folderButton);
+    await expect.element(folderButton).toHaveAttribute("aria-expanded", "false");
+    await expect.element(folder).toHaveAttribute("data-project-folder-side-chat-state", "working");
   });
 });
 

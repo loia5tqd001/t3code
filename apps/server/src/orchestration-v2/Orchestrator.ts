@@ -5277,7 +5277,7 @@ const makeOrchestrator = Effect.fn("orchestrationV2.Orchestrator.layer")(functio
           if (thread.lineage.sideChat !== true) return thread;
           return {
             ...thread,
-            ...(thread.title === "Side chat"
+            ...(thread.title === "Side chat" && thread.titleRenamed !== true
               ? { titleRegeneration: { requestId: command.commandId, startedAt: now } }
               : {}),
             lineage: {

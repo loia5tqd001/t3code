@@ -18,6 +18,7 @@ import { Atom } from "effect/reactivity";
 
 import type { EnvironmentThreadShell, PendingSubagentRequest } from "./models.ts";
 import { presentThreadShell, threadRuntimeIsActive } from "./models.ts";
+import { hasUnseenRunFailure } from "./threadSettled.ts";
 import { hiddenThreadKeys, NO_HIDDEN_THREADS } from "./threadTagFilter.ts";
 import { type EnvironmentCatalogState, enabledEnvironmentIds } from "./connections.ts";
 import {
@@ -160,15 +161,34 @@ function summarizeSideChats(threads: ReadonlyArray<EnvironmentThreadShell>): Sid
   let completed = 0;
   let failed = 0;
   for (const thread of threads) {
-    if (thread.hasPendingApprovals || thread.hasPendingUserInput) attention++;
-    else if (thread.runtime?.status === "failed") failed++;
-    else if (threadRuntimeIsActive(thread.runtime)) running++;
+    if (thread.archivedAt !== null) continue;
+    if (
+      thread.hasPendingApprovals ||
+      thread.hasPendingUserInput ||
+      thread.pendingSubagentRequest === "approval" ||
+      thread.pendingSubagentRequest === "user_input" ||
+      (thread.pendingGuestMessageCount ?? 0) > 0 ||
+      (thread.runtime?.status === "failed" &&
+        thread.runtime.lastErrorClass === "usage_limit" &&
+        (thread.latestRun?.status !== "failed" ||
+          hasUnseenRunFailure({
+            latestRun: thread.latestRun,
+            lastVisitedAt: thread.lastVisitedAt,
+          })))
+    ) {
+      attention++;
+    } else if (
+      thread.runtime?.status === "failed" &&
+      hasUnseenRunFailure({ latestRun: thread.latestRun, lastVisitedAt: thread.lastVisitedAt })
+    ) {
+      failed++;
+    } else if (threadRuntimeIsActive(thread.runtime)) running++;
     else if (
       thread.latestRun?.completedAt != null &&
       thread.latestRun.status !== "interrupted" &&
       thread.latestRun.status !== "cancelled" &&
-      (thread.lastVisitedAt == null ||
-        Date.parse(thread.latestRun.completedAt) > Date.parse(thread.lastVisitedAt))
+      thread.lastVisitedAt != null &&
+      Date.parse(thread.latestRun.completedAt) > Date.parse(thread.lastVisitedAt)
     )
       completed++;
   }
@@ -645,6 +665,8 @@ export function createEnvironmentThreadShellAtoms(input: {
             thread.pendingSubagentRequest === next[index]?.pendingSubagentRequest &&
             thread.hasActionableProposedPlan === next[index]?.hasActionableProposedPlan &&
             thread.interactionMode === next[index]?.interactionMode &&
+            thread.archivedAt === next[index]?.archivedAt &&
+            thread.pendingGuestMessageCount === next[index]?.pendingGuestMessageCount &&
             thread.runtime === next[index]?.runtime &&
             thread.latestRun === next[index]?.latestRun &&
             thread.lastVisitedAt === next[index]?.lastVisitedAt,

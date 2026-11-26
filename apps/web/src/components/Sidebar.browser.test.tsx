@@ -25,7 +25,12 @@ import { useHandleNewThread } from "../hooks/useHandleNewThread";
 import { useNowMinute } from "../hooks/useNowMinute";
 import { __setClientSettingsForTests, getClientSettings } from "../hooks/useSettings";
 import { useThreadRouteTarget } from "../hooks/useThreadRouteTarget";
-import { useProjects, useServerConfigs, useQuietThreadShells } from "../state/entities";
+import {
+  useProjects,
+  useServerConfigs,
+  useQuietThreadShells,
+  useSideChatSummary,
+} from "../state/entities";
 import { useEnvironmentIdentities } from "../state/environments";
 import { readEnvironmentScope, useEnvironmentScope } from "../state/session";
 import { useOrchestrationCommand } from "../state/use-orchestration-command";
@@ -149,6 +154,7 @@ describe("sidebar numbered jumps", () => {
     vi.mocked(useProjects).mockReturnValue([web]);
     const thread = threadShell(web.id, 0);
     vi.mocked(useQuietThreadShells).mockReturnValue([thread]);
+    vi.mocked(useSideChatSummary).mockReturnValue(null);
     const threadRef = scopeThreadRef(thread.environmentId, thread.id);
     vi.mocked(useThreadRouteTarget).mockReturnValue({ kind: "server", threadRef });
     vi.mocked(useHandleNewThread).mockReturnValue({
@@ -194,6 +200,80 @@ describe("sidebar numbered jumps", () => {
     await vi.waitFor(() =>
       expect(screen.router!.state.location.pathname).toBe(`/draft/${draftId}`),
     );
+  });
+});
+
+describe("sidebar side chat status", () => {
+  it("renders a running side chat badge on a card row without growing the card", async () => {
+    using stack = new DisposableStack();
+    const previousSettings = getClientSettings();
+    stack.defer(() => __setClientSettingsForTests(previousSettings));
+    __setClientSettingsForTests({
+      ...DEFAULT_CLIENT_SETTINGS,
+      boringSidebarEnabled: false,
+    });
+    const activeProject = project("active");
+    const parent = makeThreadFixture({
+      environmentId: activeProject.environmentId,
+      projectId: activeProject.id,
+      id: ThreadId.make("side-chat-card-running-parent"),
+      title: "Parent thread",
+    });
+    vi.mocked(useProjects).mockReturnValue([activeProject]);
+    vi.mocked(useQuietThreadShells).mockReturnValue([parent]);
+    vi.mocked(useSideChatSummary).mockImplementation((ref) =>
+      ref?.threadId === parent.id
+        ? {
+            running: 1,
+            attention: 0,
+            completed: 0,
+            failed: 0,
+          }
+        : null,
+    );
+    vi.mocked(useThreadRouteTarget).mockReturnValue({
+      kind: "server",
+      threadRef: scopeThreadRef(parent.environmentId, parent.id),
+    });
+    vi.mocked(useHandleNewThread).mockReturnValue({
+      activeDraftThread: null,
+      activeThread: null,
+      defaultProjectRef: {
+        environmentId: activeProject.environmentId,
+        projectId: activeProject.id,
+      },
+      defaultProjectFallbackReady: true,
+      handleNewThread: vi.fn().mockResolvedValue(null),
+      routeDraftId: null,
+      routeThreadRef: scopeThreadRef(parent.environmentId, parent.id),
+    });
+
+    await using screen = await render(
+      <SidebarProvider>
+        <Sidebar routeReveal={{ observedKey: null, pendingKey: null }} />
+      </SidebarProvider>,
+    );
+    const card = screen.getByTestId("sidebar-row-card-body");
+    const heightBefore = (await card.element()).getBoundingClientRect().height;
+
+    vi.mocked(useSideChatSummary).mockImplementation((ref) =>
+      ref?.threadId === parent.id
+        ? {
+            running: 1,
+            attention: 0,
+            completed: 0,
+            failed: 0,
+          }
+        : null,
+    );
+    await screen.rerender(
+      <SidebarProvider>
+        <Sidebar routeReveal={{ observedKey: null, pendingKey: null }} />
+      </SidebarProvider>,
+    );
+    const sideChats = screen.getByTestId(`sidebar-side-chats-${parent.id}`);
+    await expect.element(sideChats).toBeInTheDocument();
+    expect((await card.element()).getBoundingClientRect().height).toBe(heightBefore);
   });
 });
 
@@ -493,6 +573,12 @@ describe("sidebar environment labels", () => {
     });
     vi.mocked(useProjects).mockReturnValue([activeProject]);
     vi.mocked(useQuietThreadShells).mockReturnValue([parent, sideChat]);
+    vi.mocked(useSideChatSummary).mockReturnValue({
+      running: 1,
+      attention: 0,
+      completed: 0,
+      failed: 0,
+    });
     vi.mocked(useThreadRouteTarget).mockReturnValue({
       kind: "server",
       threadRef: scopeThreadRef(parent.environmentId, parent.id),

@@ -363,6 +363,76 @@ describe("v2 thread shell lists", () => {
     registry.dispose();
   });
 
+  it("summarizes a parent's side chats with the sidebar's attention and visit rules", () => {
+    const { registry, threads, snapshotAtom } = makeHarness();
+    const root = v2ThreadShell;
+    const sideChat = (id: string, overrides: Partial<OrchestrationV2ThreadShell> = {}) => ({
+      ...root,
+      id: ThreadId.make(id),
+      lineage: {
+        ...root.lineage,
+        parentThreadId: root.id,
+        relationshipToParent: "fork" as const,
+        sideChat: true,
+      },
+      latestRunId: RunId.make(`${id}-run`),
+      latestRunCompletedAt: v2Now,
+      lastVisitedAt: v2Now,
+      ...overrides,
+    });
+    const summary = threads.sideChatSummaryAtom({ environmentId, threadId: root.id });
+    const dispose = registry.mount(summary);
+    registry.set(snapshotAtom(environmentId), {
+      ...v2ShellSnapshot,
+      threads: [
+        root,
+        sideChat("nested-attention", {
+          pendingRuntimeRequest: {
+            id: RuntimeRequestId.make("side-chat-summary-attention"),
+            createdAt: v2Now,
+            kind: "command" as const,
+          },
+        }),
+        sideChat("guest-attention", { pendingGuestMessageCount: 1 }),
+        sideChat("seen-failure", {
+          status: "failed" as const,
+          lastVisitedAt: DateTime.makeUnsafe("2026-03-17T19:13:00.000Z"),
+          latestRunCompletedAt: DateTime.makeUnsafe("2026-03-17T19:12:00.000Z"),
+        }),
+        sideChat("archived", { archivedAt: DateTime.makeUnsafe(v2Now) }),
+      ],
+    });
+    expect(registry.get(summary)).toEqual({
+      running: 0,
+      attention: 2,
+      completed: 0,
+      failed: 0,
+    });
+
+    registry.set(snapshotAtom(environmentId), {
+      ...v2ShellSnapshot,
+      threads: [
+        root,
+        sideChat("unseen-failure", {
+          status: "failed" as const,
+          lastVisitedAt: DateTime.makeUnsafe("2026-03-17T19:10:00.000Z"),
+          latestRunCompletedAt: DateTime.makeUnsafe("2026-03-17T19:12:00.000Z"),
+        }),
+        sideChat("missing-watermark", {
+          lastVisitedAt: null,
+        }),
+      ],
+    });
+    expect(registry.get(summary)).toEqual({
+      running: 0,
+      attention: 0,
+      completed: 0,
+      failed: 1,
+    });
+    dispose();
+    registry.dispose();
+  });
+
   it("brings a parent back from Working while a nested subagent waits for approval", () => {
     const { registry, threads, snapshotAtom } = makeHarness();
     const child = {

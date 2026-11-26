@@ -70,7 +70,7 @@ export const SidebarProjectFolderHeader = memo(function SidebarProjectFolderHead
         })),
       )
     : null;
-  const sideChatDot = sideChatState;
+  const sideChatDot = collapsed ? sideChatState : null;
   const dot =
     threadDot === "attention" || sideChatDot === "attention"
       ? "attention"

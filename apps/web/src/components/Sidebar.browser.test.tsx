@@ -536,7 +536,7 @@ describe("sidebar environment labels", () => {
     await expect.element(screen.getByText("#42")).not.toBeInTheDocument();
   });
 
-  it("shows a side chat's status on its project folder even while the folder is open", async () => {
+  it("shows a side chat's status on its project folder only while the folder is collapsed", async () => {
     using stack = new DisposableStack();
     const previousSettings = getClientSettings();
     stack.defer(() => __setClientSettingsForTests(previousSettings));
@@ -597,12 +597,13 @@ describe("sidebar environment labels", () => {
     );
 
     const folder = screen.getByTestId("sidebar-project-folder");
-    await expect.element(folder).toHaveAttribute("data-project-folder-side-chat-state", "working");
-    await expect.element(folder.getByText(", working", { exact: true })).toBeVisible();
+    await expect.element(folder).toHaveAttribute("data-project-folder-side-chat-state", "none");
+    await expect.element(screen.getByTestId(`sidebar-side-chats-${parent.id}`)).toBeInTheDocument();
     const folderButton = folder.getByRole("button", { name: /^active/ });
     await userEvent.click(folderButton);
     await expect.element(folderButton).toHaveAttribute("aria-expanded", "false");
     await expect.element(folder).toHaveAttribute("data-project-folder-side-chat-state", "working");
+    await expect.element(folder.getByText(", working", { exact: true })).toBeVisible();
   });
 });
 

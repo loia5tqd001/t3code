@@ -6,7 +6,7 @@ T3 Code has one server-side observability model:
 
 - pretty logs go to stdout for humans
 - completed spans go to a local NDJSON trace file
-- traces, metrics, and logs can also be exported over OTLP to a real backend like Grafana LGTM
+- remote OTLP export is disabled; all diagnostics stay on this machine
 
 The local trace file is the persisted source of truth for normal local launches. Those launches do not
 write a separate server log file, but SSH-managed launches also persist the remote process's
@@ -23,15 +23,12 @@ Logs are human-facing:
 - format: `Logger.consolePretty()`
 - normal local persistence: none
 - SSH-managed launch persistence: `~/.t3/ssh-launch/<state>/server.log`
-- remote export: OTLP only, when configured
+- remote export: disabled
 
 If you want a log message to show up in the trace file, emit it inside an active span with `Effect.log...`. `Logger.tracerLogger` will attach it as a span event.
 
-Configuring a logs endpoint takes over that job. The server then exports log records, which cover
-every message instead of only the ones inside an active span and carry the trace and span ids so
-they still line up with the trace. `Logger.tracerLogger` is dropped in that mode, so the same
-message is not exported twice and the trace file stops carrying log messages. stdout output and
-SSH-managed launch persistence stay unchanged either way.
+Every log message is written to stdout. Spans also carry in-span log events in the local trace file.
+SSH-managed launch persistence stays unchanged.
 
 ### Traces
 
@@ -44,18 +41,16 @@ worktree uses `~/.t3/dev/logs/server.trace.ndjson`.
 
 Important fields common to both record types:
 
-- `type`: `effect-span` or `otlp-span`
+- `type`: `effect-span`
 - `name`: span name
 - `traceId`, `spanId`, `parentSpanId`: correlation
 - `durationMs`: elapsed time
 - `attributes`: structured context
 - `events`: embedded logs and custom events
 
-`effect-span` records also contain `exit` with `Success`, `Failure`, or `Interrupted`. `otlp-span`
-records instead carry OTLP resource, scope, and optional status fields.
+Records also contain `exit` with `Success`, `Failure`, or `Interrupted`.
 
-The `TraceRecord`, `EffectTraceRecord`, and `OtlpTraceRecord` schemas live in
-`packages/shared/src/observability.ts`.
+The `TraceRecord` and `EffectTraceRecord` types live in `packages/shared/src/observability.ts`.
 
 SQL statement spans (named `sqlite`) and `sql.transaction` spans carry `db.connection` and
 `db.lock_wait_ms`. `db.connection` is `writer` for the read-write connection or `reader` for a
@@ -96,18 +91,18 @@ minutes. The rate is per minute between the first and last span end.
 Metrics are not written to a local file.
 
 - local persistence: none
-- remote export: OTLP only, when configured
+- remote export: disabled
 - current definitions: `apps/server/src/observability/Metrics.ts`
 
-If OTLP is not configured, metrics still exist in-process, but you will not have a local artifact to inspect.
+Metrics remain in-process and can be inspected from Diagnostics; no OTLP transport is configured.
 
 ### Event Loop Stalls
 
 `apps/server/src/observability/EventLoopMonitor.ts` samples the server's event loop every 30 s. When
 the loop stalled for more than 2 s since the previous sample, it records a root
 `server.eventLoop.stall` span with a warning. The span has trace level `Warn`, so it stays when
-`T3CODE_TRACE_MIN_LEVEL` is `Warn`. The warning shows in Settings > Diagnostics unless OTLP logs are
-on. The span time is when the sample ran, not when the stall happened.
+`T3CODE_TRACE_MIN_LEVEL` is `Warn`. The warning shows in Settings > Diagnostics. The span time is
+when the sample ran, not when the stall happened.
 
 The trace file rotates in well under an hour on a busy server, so each stall is also appended as one
 NDJSON line to `event-loop-stalls.ndjson`, next to the trace file. A line has `time` and the span
@@ -142,18 +137,9 @@ waiting. Read CPU together with page faults:
 
 Provider event NDJSON files still exist for provider runtime streams. Those are separate from the main server trace file.
 
-## Run The Server In Instrumented Mode
+## Run The Server In Local Diagnostic Mode
 
-There are two useful modes:
-
-- local-only: stdout + local `server.trace.ndjson`
-- full local observability: stdout + local trace file + OTLP export to Grafana/Tempo/Prometheus
-
-The local trace file is always on. OTLP export is opt-in.
-
-### Option 1: Local Traces Only
-
-You do not need any extra env vars. Just run the app normally and inspect `server.trace.ndjson`.
+T3 Code writes stdout and local `server.trace.ndjson`; remote OTLP export is not available.
 
 Examples:
 
@@ -168,94 +154,6 @@ node --run dev
 ```bash
 node --run dev:desktop
 ```
-
-### Option 2: Run With A Local LGTM Stack
-
-#### 1. Start Grafana LGTM
-
-```bash
-docker run --name lgtm \
-  -p 3000:3000 \
-  -p 4317:4317 \
-  -p 4318:4318 \
-  --rm -ti \
-  grafana/otel-lgtm
-```
-
-Then open `http://localhost:3000`.
-
-Default Grafana login:
-
-- username: `admin`
-- password: `admin`
-
-#### 2. Export OTLP env vars
-
-For endpoint settings and startup precedence, see the
-[user telemetry guide](../user/telemetry.md#export-diagnostics-to-your-own-receiver).
-In a worktree, use `vp run dev` instead of `t3` to keep state isolated.
-
-```bash
-export T3CODE_OTLP_TRACES_URL=http://localhost:4318/v1/traces
-export T3CODE_OTLP_METRICS_URL=http://localhost:4318/v1/metrics
-export T3CODE_OTLP_LOGS_URL=http://localhost:4318/v1/logs
-export OTEL_RESOURCE_ATTRIBUTES=deployment.environment.name=development
-```
-
-Optional:
-
-```bash
-export T3CODE_TRACE_MIN_LEVEL=Info
-export T3CODE_TRACE_TIMING_ENABLED=true
-```
-
-#### 3. Launch the app from that same shell
-
-CLI:
-
-```bash
-t3
-```
-
-Monorepo web/server dev:
-
-```bash
-node --run dev
-```
-
-Monorepo desktop dev:
-
-```bash
-node --run dev:desktop
-```
-
-Packaged desktop app:
-
-Launch the actual app executable from the same shell so the desktop app and embedded backend inherit `T3CODE_OTLP_*`.
-
-macOS app bundle example:
-
-```bash
-T3CODE_OTLP_TRACES_URL=http://localhost:4318/v1/traces \
-T3CODE_OTLP_METRICS_URL=http://localhost:4318/v1/metrics \
-T3CODE_OTLP_LOGS_URL=http://localhost:4318/v1/logs \
-"/Applications/T3 Code.app/Contents/MacOS/T3 Code"
-```
-
-Direct binary example:
-
-```bash
-T3CODE_OTLP_TRACES_URL=http://localhost:4318/v1/traces \
-T3CODE_OTLP_METRICS_URL=http://localhost:4318/v1/metrics \
-T3CODE_OTLP_LOGS_URL=http://localhost:4318/v1/logs \
-./path/to/your/desktop-app-binary
-```
-
-Do not rely on launching from Finder, Spotlight, the dock, or the Start menu after setting shell env vars. Those launches usually will not pick them up.
-
-#### 4. Fully restart after changing env
-
-The backend reads observability config at process start. If you change OTLP env vars, stop the app completely and start it again.
 
 ## How To Use Traces And Metrics To Debug The Server
 
@@ -364,30 +262,9 @@ jq -c 'select(.attributes["git.operation"] != null) | {
 }' "$TRACE_FILE"
 ```
 
-### Use Tempo When You Need A Real Trace Viewer
+Users can inspect local NDJSON directly with `jq`, `t3 trace summary`, or the spans shown in
+Settings > Diagnostics.
 
-Tempo is better than raw NDJSON when you want to:
-
-- search across many traces
-- inspect parent/child relationships visually
-- compare many slow traces
-- drill into one failing request without hand-joining by `traceId`
-
-Recommended flow in Grafana:
-
-1. Open `Explore`.
-2. Pick the `Tempo` data source.
-3. Set the time range to something recent like `Last 15 minutes`.
-4. Start broad. Do not begin with a very narrow query.
-5. Look for spans from the `t3code-server` or `t3code-desktop` service, then narrow by span name or
-   attributes.
-
-Good first searches:
-
-- service name `t3code-server` or `t3code-desktop`, plus a resource attribute such as
-  `deployment.environment.name`
-- span names like `sendTurn` or a Git operation such as `GitVcsDriver.statusDetails.status`
-- Git spans whose `git.operation` attribute identifies the operation
 - orchestration spans with attributes like `orchestration_v2.command_type`
 
 Once you know traces are arriving, narrower TraceQL queries for names such as `sendTurn` or Git
@@ -426,9 +303,7 @@ Webhooks have their own families:
   tools redeeming them. Neither ever carries a value.
 
 `ScheduledTaskService.triggerWebhook` spans carry the same outcome per request, and each run
-started from a delivery is its own `ScheduledTaskService.runWebhookDelivery` trace. For a request
-the relay forwarded, the span also goes to the T3 Connect trace export as a child of the relay's
-span; requests that reach the environment directly never join a sender's trace.
+started from a delivery is its own `ScheduledTaskService.runWebhookDelivery` trace.
 
 Use metrics when the question is:
 
@@ -450,11 +325,11 @@ Use traces when the question is:
 2. Find `effect-span` records where `exit._tag != "Success"`.
 3. Group by `traceId`.
 4. Inspect sibling spans and span events.
-5. If needed, move to Tempo for the full trace tree.
+5. Follow the shared `traceId` through sibling spans and events.
 
 ### "Why is the UI feeling slow?"
 
-1. Search for slow top-level spans in the trace file or Tempo.
+1. Search for slow top-level spans in the trace file.
 2. Check child spans for sqlite, git, provider, or terminal work.
 3. Look at the matching duration metrics to see whether the slowness is systemic.
 
@@ -463,24 +338,6 @@ Use traces when the question is:
 1. Filter `git.operation` spans.
 2. Inspect `git.hook.started` and `git.hook.finished` events.
 3. Compare hook timing to the enclosing git span duration.
-
-### "Why do I have spans locally but nothing in Grafana?"
-
-Usually one of these is true:
-
-- `T3CODE_OTLP_TRACES_URL` was not set
-- the app was launched from a different environment than the one where you exported the vars
-- the app was not fully restarted after changing env
-- Grafana is looking at the wrong time range or service name
-
-If the local NDJSON file is updating, local tracing is working. The problem is almost always OTLP export configuration or process startup.
-
-If metrics arrive but logs or traces have gaps, read `t3_otlp_export_attempt_failures_total` by
-`signal` and `reason` (`status_<code>`, `transport`, `encode`). The exporter drops a batch once it
-fails (transport errors and 408, 429, 500, 502, 503 and 504 after 3 retries; other statuses and
-encoding at once) and then drops that signal for 60 s, logging it only at Debug, so at the default
-log level this counter is the only record. Every retry counts, so one dropped batch reads as up to
-four.
 
 ## How To Think About Adding Tracing To Future Code
 
@@ -591,18 +448,12 @@ It provides:
 - pretty stdout logger
 - `Logger.tracerLogger`
 - local NDJSON tracer
-- optional OTLP trace exporter
-- optional OTLP metrics exporter
-- optional OTLP log exporter
 - Effect trace-level and timing refs
 
 The desktop main process is a second producer, assembled in
-`apps/desktop/src/app/DesktopObservability.ts`. It reads the same `T3CODE_OTLP_*` names and the same
-Settings entries as the backend it supervises, and covers work the backend cannot see: app startup,
-window and menu handling, backend supervision, and updates. It reports as service
-`t3code-desktop`, so a collector shows it alongside the backend rather than mixed into it. It
-exports traces and logs only; the main process records no metrics, so the metrics endpoint applies
-to the backend alone.
+`apps/desktop/src/app/DesktopObservability.ts`. It writes its local NDJSON trace and log files and
+covers work the backend cannot see: app startup, window and menu handling, backend supervision, and
+updates.
 
 ### Env Vars
 
@@ -614,77 +465,6 @@ Local trace file:
 - `T3CODE_TRACE_BATCH_WINDOW_MS`: flush window, default `1000`
 - `T3CODE_TRACE_MIN_LEVEL`: minimum trace level, default `Info`
 - `T3CODE_TRACE_TIMING_ENABLED`: enable timing metadata, default `true`
-
-OTLP export:
-
-- `T3CODE_OTLP_TRACES_URL`: OTLP trace endpoint
-- `T3CODE_OTLP_METRICS_URL`: OTLP metric endpoint
-- `T3CODE_OTLP_LOGS_URL`: OTLP log endpoint
-- `T3CODE_OTLP_EXPORT_INTERVAL_MS`: export interval, default `10000`
-- `T3CODE_OTLP_HEADERS`: extra headers for all three exporters, same format as
-  `OTEL_EXPORTER_OTLP_HEADERS`: comma-separated `key=value` pairs with percent-encoded values.
-- `T3CODE_OTLP_PROTOCOL`: `http/json` (default) or `http/protobuf`
-
-The server and the desktop app also read the standard
-`OTEL_EXPORTER_OTLP_{TRACES,METRICS,LOGS}_ENDPOINT` and generic `OTEL_EXPORTER_OTLP_ENDPOINT` (with
-`/v1/traces`, `/v1/metrics`, or `/v1/logs` appended), for a collector expecting those instead. A
-non-blank `T3CODE_OTLP_*_URL` wins over either, and a per-signal endpoint wins over the generic one
-for its signal. A blank value counts as unset. A signal with an OTEL endpoint takes its headers from
-`OTEL_EXPORTER_OTLP_HEADERS` and its protocol from `OTEL_EXPORTER_OTLP_PROTOCOL` (default
-`http/protobuf`, read case-insensitively), and a per-signal
-`OTEL_EXPORTER_OTLP_{TRACES,METRICS,LOGS}_HEADERS` or `_PROTOCOL` wins over the generic one for its
-signal. `T3CODE_OTLP_HEADERS` and `T3CODE_OTLP_PROTOCOL` never apply to it. An endpoint that is not
-an `http` or `https` URL, a protocol other than `http/protobuf` or `http/json` such as `grpc`, or
-headers that are not `key=value` pairs with percent-encoded values turn that signal's export off
-with a startup warning, rather than sending it to the Settings endpoint.
-
-Service names are fixed: `t3code-server` for the backend and `t3code-desktop` for the desktop main
-process, both in `service.namespace` `t3code`. `OTEL_SERVICE_NAME` and a `service.name` or
-`service.namespace` in `OTEL_RESOURCE_ATTRIBUTES` are ignored. Tell installations apart with other
-resource attributes, such as `OTEL_RESOURCE_ATTRIBUTES=deployment.environment.name=staging`.
-
-Each process reports its own build, not the one it talks to: the server, the desktop main process,
-the UI, and the mobile app each carry `t3code.release.channel` (`dev`, `stable`, `nightly`, or
-`preview`, from their own version; desktop PR builds count as `preview`, and a server not built by a
-release workflow reports `dev`) and `deployment.environment.name` (`development`, `production`, or
-`staging` for `preview`). On the server and the desktop main process either key in
-`OTEL_RESOURCE_ATTRIBUTES` wins. The UI and mobile app never read that variable: Vercel PR previews
-set `VITE_RELEASE_CHANNEL=preview` because their `APP_VERSION` must stay comparable with the
-server's, and the mobile app maps its build variant (`development`, `preview`, `production`), or
-reports `dev` from a development bundle.
-
-Attributes specific to T3 Code use the `t3code.` prefix. The UI runs as `t3code-web` in both a
-browser and the desktop window, since it is the same code, and `t3code.client.surface` is `desktop`
-or `web`. The server's `t3code.server.managed_by` is `desktop` when the desktop app launched it and
-`standalone` otherwise. The desktop main process reports `t3code.desktop.mode` as `development` or
-`packaged` (formerly `service.mode`; dashboards filtering on that key must switch). Node processes
-also report the semantic `process.runtime.name`, `process.runtime.version`, and
-`process.runtime.description`, and UI traces report `browser.language`, `user_agent.original`, and,
-in Chromium, `browser.platform`, `browser.mobile`, and `browser.brands`.
-
-Every resource also carries a `service.instance.id`: random per process for the server and desktop,
-per page load for the UI, and the Expo session on mobile. A `service.instance.id` in
-`OTEL_RESOURCE_ATTRIBUTES` replaces the generated one on the server and desktop.
-
-If the OTLP URLs are unset, local tracing still works, metrics stay in-process only, and logs stay
-on stdout only.
-
-### The Kill Switch
-
-`T3CODE_OTEL_SDK_DISABLED` and `OTEL_SDK_DISABLED` turn off every OTLP export in both the server and
-the desktop main process, overriding any endpoint from the environment or Settings. Local trace
-files and stdout logs are unaffected.
-
-`T3CODE_OTEL_SDK_DISABLED` wins when set, so `T3CODE_OTEL_SDK_DISABLED=false` re-enables export on a
-machine that sets `OTEL_SDK_DISABLED` for everything else. It accepts the usual boolean spellings
-(`true`/`false`, `yes`/`no`, `on`/`off`, `1`/`0`, `y`/`n`). `OTEL_SDK_DISABLED` follows the
-OpenTelemetry specification and only `true` disables export, so `OTEL_SDK_DISABLED=1` does not.
-Values are case-insensitive and trimmed. An unrecognized value is ignored with a startup warning.
-
-`OTEL_TRACES_EXPORTER`, `OTEL_METRICS_EXPORTER`, or `OTEL_LOGS_EXPORTER` set to `none` turns off
-just that signal, overriding an OTEL endpoint and the Settings endpoint. A `T3CODE_OTLP_*_URL` still
-wins for its signal. `otlp` is the default, and any other exporter name, such as `console` or
-`prometheus`, is ignored with a startup warning.
 
 ### What Is Instrumented Today
 

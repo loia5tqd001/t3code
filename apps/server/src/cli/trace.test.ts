@@ -16,21 +16,6 @@ function span(name: string, durationMs: number, endMs: number, exitTag = "Succes
   });
 }
 
-function browserSpan(
-  name: string,
-  status: { code: string; message?: string },
-  attributes: Record<string, unknown> = {},
-) {
-  return JSON.stringify({
-    type: "otlp-span",
-    name,
-    durationMs: 1,
-    endTimeUnixNano: "1000000",
-    status,
-    attributes,
-  });
-}
-
 it("drops spans that ended before the window and counts unreadable lines", () => {
   const summarizer = makeTraceSpanSummary(MINUTE_MS);
   [
@@ -48,19 +33,6 @@ it("drops spans that ended before the window and counts unreadable lines", () =>
     summary.spans.map((entry) => [entry.name, entry.count, entry.perMinute]),
     [["recent", 1, undefined]],
   );
-});
-
-it("reads failures and interrupts of browser spans from their OTLP status", () => {
-  const summarizer = makeTraceSpanSummary();
-  [
-    browserSpan("render", { code: "2", message: "boom" }),
-    browserSpan("render", { code: "0" }, { "effect.fiber.interrupted": true }),
-    browserSpan("render", { code: "1", message: "Interrupted" }),
-    browserSpan("render", { code: "1" }),
-  ].forEach(summarizer.addLine);
-
-  const [render] = summarizer.finish().spans;
-  assert.deepStrictEqual([render?.count, render?.interrupted, render?.failures], [4, 2, 1]);
 });
 
 it("prints durations that round up to a second in seconds", () => {

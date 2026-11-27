@@ -12,7 +12,6 @@ import * as Threads from "../orchestration-v2/ThreadManagementService.ts";
 import * as Projects from "../project/ProjectService.ts";
 import * as Providers from "../provider/ProviderRegistry.ts";
 import * as Settings from "../serverSettings.ts";
-import { providerDimensions } from "../telemetry/ProviderDimensions.ts";
 import {
   FEEDBACK_AWAITING_APPROVAL_NOTE,
   FEEDBACK_SUBJECT_MESSAGE,
@@ -49,7 +48,7 @@ export class FeedbackApprovalError extends Schema.TaggedError<FeedbackApprovalEr
   {},
 ) {
   override get message() {
-    return "A report the user asks for is shown to them for approval in their thread, and this call has no active thread turn, so nothing was sent.";
+    return "A report the user asks for is shown to them for approval in their thread, and this call has no active thread turn, so nothing was saved.";
   }
 }
 
@@ -62,8 +61,8 @@ export class FeedbackService extends Context.Service<
   FeedbackService,
   {
     /**
-     * Sends an unprompted report at once. A requested one is shown to the user in a card and
-     * returns at once; it is stored and sent only if they choose Send.
+     * Saves an unprompted report at once. A requested one is shown to the user in a card and
+     * returns at once; it is stored only if they choose Save.
      */
     readonly submit: (
       input: FeedbackInput,
@@ -153,10 +152,6 @@ const make = Effect.fn("FeedbackService.make")(function* (
         source: caller.source,
         threadId: caller.threadId ?? null,
         runId,
-        dimensions:
-          caller.source === "mcp" && thread !== undefined
-            ? providerDimensions(providerList, thread.modelSelection)
-            : {},
       });
     }
 
@@ -168,7 +163,7 @@ const make = Effect.fn("FeedbackService.make")(function* (
             .getThreadRecords(threadId, ["runs"], { runIds: [runId] })
             .pipe(Effect.mapError(storageError))).runs.find((candidate) => candidate.id === runId);
     if (run === undefined || run.rootNodeId === null) return yield* new FeedbackApprovalError({});
-    // Both traces are built now, so the card shows exactly what each choice sends.
+    // Both traces are built now, so the card shows exactly what each choice saves.
     const traces = yield* Effect.gen(function* () {
       // Records cannot filter on started, so widen past the unstarted (queued) runs the last
       // read found. Each pass reads more runs than the one before, until it holds enough

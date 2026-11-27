@@ -5,7 +5,6 @@ import * as Layer from "effect/Layer";
 import * as Metric from "effect/Metric";
 import * as Ref from "effect/Ref";
 
-import * as ServerConfig from "../config.ts";
 import { metricAttributes } from "../observability/Metrics.ts";
 import * as ResourceTelemetry from "./ResourceTelemetry.ts";
 
@@ -93,14 +92,11 @@ export function groupProcesses(
 }
 
 /**
- * Exports process totals by group while OTLP metrics export is on. Sampling walks the process
- * table, which an idle server otherwise never does, so only a server exporting metrics pays for
- * it, once a minute.
+ * Exports process totals by group to local metrics. Sampling walks the process table, which an
+ * idle server otherwise never does, so this runs once a minute.
  */
 export const layer = Layer.effectDiscard(
   Effect.gen(function* () {
-    const config = yield* ServerConfig.ServerConfig;
-    if (config.otlpMetricsUrl === undefined) return;
     const telemetry = yield* ResourceTelemetry.ResourceTelemetry;
     // A group that empties reads zero rather than holding its last value.
     const seen = new Set<string>();

@@ -6,11 +6,10 @@ import * as Effect from "effect/Effect";
 import * as FileSystem from "effect/FileSystem";
 import * as Layer from "effect/Layer";
 import * as Path from "effect/Path";
-import * as Redacted from "effect/Redacted";
 import { describe, expect, it } from "vite-plus/test";
 import * as NodeServices from "@effect/platform-node/NodeServices";
 
-import { PublishClientConfig, reconcileEnvFile, tokenDigest } from "./clientConfig.ts";
+import { PublishClientConfig, reconcileEnvFile } from "./clientConfig.ts";
 
 describe("reconcileEnvFile", () => {
   it("replaces stale values and keeps unrelated lines", () => {
@@ -62,15 +61,8 @@ const { test } = Test.make({
   state: inMemoryState(),
 });
 
-const clientConfig = (token: string) => ({
+const clientConfig = (_token: string) => ({
   url: "https://relay.example.com",
-  mobileTracingUrl: "https://axiom.example.com/v1/traces",
-  mobileTracingDataset: "relay-traces",
-  mobileTracingToken: Redacted.make(`mobile-${token}`),
-  clientTracingUrl: "https://axiom.example.com/v1/traces",
-  clientTracingDataset: "relay-traces",
-  clientTracingToken: Redacted.make(`client-${token}`),
-  tokenDigest: tokenDigest([Redacted.make(`mobile-${token}`), Redacted.make(`client-${token}`)]),
 });
 
 describe("PublishClientConfig", () => {
@@ -91,8 +83,7 @@ describe("PublishClientConfig", () => {
       const first = yield* fs.readFileString(target);
       expect(first).toContain("KEEP=yes\n");
       expect(first).toContain("T3CODE_RELAY_URL=https://relay.example.com\n");
-      expect(first).toContain("T3CODE_RELAY_CLIENT_OTLP_TRACES_TOKEN=client-v1\n");
-      expect(first).toContain("T3CODE_MOBILE_OTLP_TRACES_TOKEN=mobile-v1\n");
+      expect(first).not.toContain("OTLP");
 
       yield* fs.writeFileString(target, `${first}MANUAL=1\n`);
       yield* stack.deploy(PublishClientConfig(clientConfig("v1"))).pipe(configured);
@@ -100,8 +91,7 @@ describe("PublishClientConfig", () => {
 
       yield* stack.deploy(PublishClientConfig(clientConfig("v2"))).pipe(configured);
       const third = yield* fs.readFileString(target);
-      expect(third).toContain("T3CODE_RELAY_CLIENT_OTLP_TRACES_TOKEN=client-v2\n");
-      expect(third).not.toContain("client-v1");
+      expect(third).not.toContain("OTLP");
       expect(third).toContain("KEEP=yes\n");
     }).pipe(Effect.scoped, Effect.provide(NodeServices.layer)),
   );
@@ -124,32 +114,6 @@ describe("PublishClientConfig", () => {
         );
       expect(exit._tag).toBe("Failure");
       expect(String(exit)).toContain("RelayUrlUnavailableError");
-      expect(yield* fs.exists(target)).toBe(false);
-    }).pipe(Effect.scoped, Effect.provide(NodeServices.layer)),
-  );
-
-  test.provider("refuses a value with a line break rather than corrupting the file", (stack) =>
-    Effect.gen(function* () {
-      const fs = yield* FileSystem.FileSystem;
-      const path = yield* Path.Path;
-      const dir = yield* fs.makeTempDirectoryScoped({ prefix: "t3-relay-client-config-" });
-      const target = path.join(dir, "client.env");
-      const exit = yield* stack
-        .deploy(
-          PublishClientConfig({
-            ...clientConfig("v1"),
-            clientTracingDataset: "relay-traces\nINJECTED=1",
-          }),
-        )
-        .pipe(
-          Effect.provide(
-            ConfigProvider.layer(
-              ConfigProvider.fromUnknown({ T3CODE_RELAY_CLIENT_CONFIG_ENV: target }),
-            ),
-          ),
-          Effect.exit,
-        );
-      expect(exit._tag).toBe("Failure");
       expect(yield* fs.exists(target)).toBe(false);
     }).pipe(Effect.scoped, Effect.provide(NodeServices.layer)),
   );

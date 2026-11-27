@@ -1,5 +1,6 @@
 import { assert, describe, it } from "@effect/vitest";
 import type { ResourceTelemetryProcess, ResourceTelemetrySnapshot } from "@t3tools/contracts";
+import * as NodeServices from "@effect/platform-node/NodeServices";
 import * as Clock from "effect/Clock";
 import * as Effect from "effect/Effect";
 import * as Layer from "effect/Layer";
@@ -87,11 +88,7 @@ describe("ProcessGroupMetrics.layer", () => {
       yield* Layer.build(
         ProcessGroupMetrics.layer.pipe(
           Layer.provide(Layer.succeed(ResourceTelemetry.ResourceTelemetry, telemetry)),
-          Layer.provide(
-            ServerConfig.layer({
-              otlpMetricsUrl: "http://localhost:4318/v1/metrics",
-            } as ServerConfig.ServerConfig["Service"]),
-          ),
+          Layer.provide(ServerConfig.layerTest(".", { prefix: "t3-process-group-" })),
         ),
       );
       yield* afterStart;
@@ -100,6 +97,7 @@ describe("ProcessGroupMetrics.layer", () => {
       Effect.scoped,
       Effect.provide(
         Layer.mergeAll(
+          NodeServices.layer,
           Logger.layer([logger], { mergeWithExisting: false }),
           Layer.succeed(References.MinimumLogLevel, "Debug"),
         ),

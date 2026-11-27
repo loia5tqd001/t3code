@@ -2992,7 +2992,6 @@
   "c646366e142ba05f": "El estado de WSL del escritorio no está disponible.",
   "228dcd284ea651b3": "No se pudo cargar el estado de WSL.",
   "b08d105dd2553f8d": "El proyecto no apareció en la app de escritorio.",
-  "7a4b3f3b83e121d7": "{organization} desactivó los datos de uso anónimos.",
   "d85822b18e9475df": "Gestionado por {organization}.",
   "a6dd531d58080010": "Conéctate a este servidor para comprobar las versiones.",
   "314cdccee9c14774": "Este servidor no permite consultas al registro. Actualízalo antes de cambiar de canal.",
@@ -6165,26 +6164,8 @@
   ],
   "216ab7514aea1d61": "Empezar sin agente",
   "501ce2d99da8bfd1": "Configura un agente para empezar.",
-  "71f3822326109c8e": [
-    "T3 Code recopila datos de uso anónimos para mejorar la app. Para desactivarlo, consulta la",
-    " ",
-    {
-      "t": "a",
-      "i": 1,
-      "c": "política de privacidad"
-    },
-    "."
-  ],
-  "b33f35083757b42c": [
-    "Consulta la",
-    " ",
-    {
-      "t": "a",
-      "i": 1,
-      "c": "política de privacidad"
-    },
-    "."
-  ],
+  "05435726e94ec757": "T3 Code guarda los datos de uso en este equipo y no envía datos de analítica del producto.",
+  "eb9de01f5efc57e0": "Consulta la",
   "f77d000c0710f066": "Activar",
   "4ed27bf946e504db": "Configurar",
   "7a26eaacff0607f7": [
@@ -10190,8 +10171,7 @@
   "c424bee294b9f778": "Este entorno lo gestiona {organization}. Algunos ajustes y funciones siguen su política.",
   "82d9538af590f58c": "Consulta tus agentes, importa proyectos y configura tu teléfono.",
   "6a48fd0a37e725a1": "Legal",
-  "d6d3ea46ac979e1c": "Cómo tratamos tus datos, incluidos los datos de uso anónimos que recopila T3 Code.",
-  "e741b1ab9396053a": "Cómo tratamos tus datos. {telemetryOff}",
+  "d36027a2e8fe03b3": "Cómo tratamos tus datos. Los datos de uso del producto permanecen en este equipo.",
   "0bffbbf4d7f780c0": "Avisos de las dependencias, recursos y herramientas opcionales que usa T3 Code.",
   "e39a57514be028e9": "Revisar",
   "7c0512387c3a42ea": "Estable",
@@ -11090,57 +11070,6 @@
   "a899361f5deb3476": "Cualquier archivo local",
   "8c92f29a2b29adb5": "Cambios sin commit",
   "deb572d6e83f3818": "Archivos con seguimiento editados",
-  "83729e5228731819": "Endpoint de trazas",
-  "8739ffcda2007458": "Endpoint de métricas",
-  "5c90c5ba936fb908": "Endpoint de registros",
-  "5e29f3c15d14bbce": "Definido por el entorno",
-  "4136ff89bb436dcc": "Definido por el escritorio",
-  "7271a3d01a7593ee": "Desactivado",
-  "dc827550691bafd1": "Conectado · {ms} ms",
-  "11b77b0add59d7b4": "Rechazado · HTTP {status}",
-  "10cf4b8e7ecc020b": "Tiempo de espera agotado",
-  "523b72ed9d712100": "Exportación de OpenTelemetry",
-  "ecaa5a9da2c44a47": "Elige un entorno para configurar sus exportaciones de telemetría.",
-  "5548e6d2e9b8cc64": "Guardado. Reinicia el servidor para aplicarlo.",
-  "23029f9ce3382536": "Esta conexión no tiene permiso para cambiar los ajustes de {environment}.",
-  "a5f1fe10ef6373fd": "Introduce un endpoint HTTP o HTTPS, o déjalo vacío para desactivar la exportación.",
-  "5b928a84a624e831": "En ejecución: {url}",
-  "b07718fe86a16cc6": "En ejecución: desactivado",
-  "6d0831556a517821": "Envía trazas, métricas y registros a un receptor OTLP HTTP. Reinicia el servidor para aplicarlo. Las variables de entorno anulan estos ajustes.",
-  "f7c3ae7a79ede728": "Probar",
-  "b93d2ec53e944576": [
-    "En ejecución: ",
-    {
-      "i": 1,
-      "k": "_gt_value_1",
-      "v": "v"
-    },
-    " desde",
-    " ",
-    {
-      "t": "code",
-      "i": 2,
-      "c": {
-        "i": 3,
-        "k": "_gt_value_3",
-        "v": "v"
-      }
-    }
-  ],
-  "ae9958ee0d8ed8e8": [
-    "En ejecución: desactivado desde",
-    " ",
-    {
-      "t": "code",
-      "i": 1,
-      "c": {
-        "i": 2,
-        "k": "_gt_value_2",
-        "v": "v"
-      }
-    }
-  ],
-  "97585565390197f6": "Descartar",
   "c0fce4a3555c5c17": "Conectar",
   "0d1eba54ff075d77": "Usarlo",
   "035dc7d3b0f3e526": "Títulos de hilos y otros textos generados",
@@ -11197,6 +11126,7 @@
     " respondió. Funciona."
   ],
   "74718b8533319acb": "Sigue al modelo de generación de texto",
+  "f7c3ae7a79ede728": "Probar",
   "b2ae5ae37b088f1b": "Ningún modelo coincide.",
   "84853da6b47fd3ab": "Fondo",
   "76ded36bf5337e44": "Fondo de la barra de herramientas",
@@ -11870,7 +11800,6 @@
   "df9fa3a9cb004b9b": "bienvenida configuración primer inicio primeros pasos agentes importar proyectos",
   "3188bc3b3c4508bc": "Política de privacidad",
   "901a823214edc8c4": "telemetría analítica datos de uso seguimiento legal desactivar",
-  "82136480255a5106": "OTel OTLP telemetría exportar endpoints registros trazas métricas Grafana",
   "659d081051faf7ff": "registros trazas procesos historial de recursos fallos spans cpu memoria",
   "5eaeacfa9f82051a": "informe error problema t3 equipo enviar comentarios agentes herramientas automático cuando lo pida",
   "f537f91e1ee41d47": "atajos de teclado teclas rápidas comandos combinaciones json",

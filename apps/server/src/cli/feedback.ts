@@ -11,13 +11,11 @@ import { Command, Flag, GlobalFlag } from "effect/cli";
 import * as ServerConfig from "../config.ts";
 import { readFeedbackReports } from "../feedback/FeedbackList.ts";
 import * as ManagedPolicy from "../policy/ManagedPolicy.ts";
-import * as ServerSettings from "../serverSettings.ts";
 
 import {
   FEEDBACK_CLI_CLIENT_LABEL,
   FEEDBACK_OFF_MESSAGE,
   FeedbackInput,
-  FeedbackOffError,
   FeedbackSubmitResult,
 } from "../feedback/FeedbackReport.ts";
 import {
@@ -59,9 +57,6 @@ const listReports = Effect.fn("cli.feedback.listReports")(function* (flags: CliA
     quietLogs: true,
   });
   return yield* Effect.gen(function* () {
-    // Settings first, from the file alone, so Off never opens the database.
-    const { agentFeedback } = yield* ServerSettings.readServerSettingsFromDisk;
-    if (agentFeedback.mode === "off") return yield* new FeedbackOffError({});
     const { dbPath } = yield* ServerConfig.ServerConfig;
     const fs = yield* FileSystem.FileSystem;
     if (!(yield* fs.exists(dbPath))) return [];
@@ -90,7 +85,7 @@ const feedbackListCommand = Command.make("list", { ...authLocationFlags, json: j
               report.kind,
               report.subject || "-",
               report.userRequested ? "approved" : "unprompted",
-              report.sent ? "sent" : "local",
+              report.sent ? "saved" : "local",
             ].join("  "),
           );
           yield* Console.log(`  expected: ${report.expected}`);
@@ -106,10 +101,7 @@ const feedbackListCommand = Command.make("list", { ...authLocationFlags, json: j
       },
       // Every failure is one line on stderr; the runtime does not log it again.
       Effect.catch((error) => {
-        const detail =
-          error._tag === "FeedbackOffError"
-            ? error.message
-            : `Could not read this machine's feedback reports: ${firstLine(error)}`;
+        const detail = `Could not read this machine's feedback reports: ${firstLine(error)}`;
         return Console.error(detail).pipe(
           Effect.andThen(Effect.fail(new FeedbackListError({ detail }))),
         );
@@ -134,7 +126,7 @@ export const feedbackCommand = Command.make("feedback", {
   ),
 }).pipe(
   Command.withDescription(
-    "Send feedback about T3 Code to the T3 team. Needs Agent feedback set to Automatic in Settings > Labs; to approve a report first, ask your agent in a thread.",
+    "Save feedback about T3 Code on this machine. Needs Agent feedback set to Automatic in Settings > Labs; to approve a report first, ask your agent in a thread.",
   ),
   Command.withHandler(({ baseDir, kind, subject, expected, actual, workaround }) =>
     withThreadTools(

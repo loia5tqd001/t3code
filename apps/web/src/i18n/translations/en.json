@@ -2992,7 +2992,6 @@
   "c646366e142ba05f": "Desktop WSL state is unavailable.",
   "228dcd284ea651b3": "Failed to load WSL state.",
   "b08d105dd2553f8d": "The project did not appear in the desktop app.",
-  "7a4b3f3b83e121d7": "{organization} turned off anonymous usage data.",
   "d85822b18e9475df": "Managed by {organization}.",
   "a6dd531d58080010": "Connect to this server to check releases.",
   "314cdccee9c14774": "This server does not support registry lookups. Update it before switching tracks.",
@@ -6167,26 +6166,8 @@
   ],
   "216ab7514aea1d61": "Start without an agent",
   "501ce2d99da8bfd1": "Set up one agent to start.",
-  "71f3822326109c8e": [
-    "T3 Code collects anonymous usage data to improve the app. To opt out, see the",
-    " ",
-    {
-      "t": "a",
-      "i": 1,
-      "c": "privacy policy"
-    },
-    "."
-  ],
-  "b33f35083757b42c": [
-    "See the",
-    " ",
-    {
-      "t": "a",
-      "i": 1,
-      "c": "privacy policy"
-    },
-    "."
-  ],
+  "05435726e94ec757": "T3 Code keeps usage data on this machine and does not send product analytics.",
+  "eb9de01f5efc57e0": "See the",
   "f77d000c0710f066": "Turn on",
   "4ed27bf946e504db": "Set up",
   "7a26eaacff0607f7": [
@@ -10202,8 +10183,7 @@
   "c424bee294b9f778": "This environment is managed by {organization}. Some settings and features follow its policy.",
   "82d9538af590f58c": "See your agents, import projects, and set up your phone.",
   "6a48fd0a37e725a1": "Legal",
-  "d6d3ea46ac979e1c": "How we handle your data, including the anonymous usage data T3 Code collects.",
-  "e741b1ab9396053a": "How we handle your data. {telemetryOff}",
+  "d36027a2e8fe03b3": "How we handle your data. Product usage data stays on this machine.",
   "0bffbbf4d7f780c0": "Notices for dependencies, assets, and optional tools used by T3 Code.",
   "e39a57514be028e9": "Review",
   "7c0512387c3a42ea": "Stable",
@@ -11105,57 +11085,6 @@
   "a899361f5deb3476": "Any local files",
   "8c92f29a2b29adb5": "Uncommitted changes",
   "deb572d6e83f3818": "Edited tracked files",
-  "83729e5228731819": "Traces endpoint",
-  "8739ffcda2007458": "Metrics endpoint",
-  "5c90c5ba936fb908": "Logs endpoint",
-  "5e29f3c15d14bbce": "Set by environment",
-  "4136ff89bb436dcc": "Set by desktop",
-  "7271a3d01a7593ee": "Off",
-  "dc827550691bafd1": "Connected · {ms} ms",
-  "11b77b0add59d7b4": "Rejected · HTTP {status}",
-  "10cf4b8e7ecc020b": "Timed out",
-  "523b72ed9d712100": "OpenTelemetry export",
-  "ecaa5a9da2c44a47": "Choose one environment to configure its telemetry exports.",
-  "5548e6d2e9b8cc64": "Saved. Restart the server to apply.",
-  "23029f9ce3382536": "This connection lacks permission to change settings on {environment}.",
-  "a5f1fe10ef6373fd": "Enter an HTTP or HTTPS endpoint, or leave empty to disable export.",
-  "5b928a84a624e831": "Running: {url}",
-  "b07718fe86a16cc6": "Running: Disabled",
-  "6d0831556a517821": "Send traces, metrics, and logs to an OTLP HTTP receiver. Restart the server to apply. Environment variables override these settings.",
-  "f7c3ae7a79ede728": "Test",
-  "b93d2ec53e944576": [
-    "Running: ",
-    {
-      "i": 1,
-      "k": "_gt_value_1",
-      "v": "v"
-    },
-    " from",
-    " ",
-    {
-      "t": "code",
-      "i": 2,
-      "c": {
-        "i": 3,
-        "k": "_gt_value_3",
-        "v": "v"
-      }
-    }
-  ],
-  "ae9958ee0d8ed8e8": [
-    "Running: Disabled from",
-    " ",
-    {
-      "t": "code",
-      "i": 1,
-      "c": {
-        "i": 2,
-        "k": "_gt_value_2",
-        "v": "v"
-      }
-    }
-  ],
-  "97585565390197f6": "Discard",
   "c0fce4a3555c5c17": "Connect",
   "0d1eba54ff075d77": "Use it",
   "035dc7d3b0f3e526": "Thread titles and other generated text",
@@ -11212,6 +11141,7 @@
     " answered. It works."
   ],
   "74718b8533319acb": "Follows the text generation model",
+  "f7c3ae7a79ede728": "Test",
   "b2ae5ae37b088f1b": "No models match.",
   "84853da6b47fd3ab": "Background",
   "76ded36bf5337e44": "Toolbar background",
@@ -11885,7 +11815,6 @@
   "df9fa3a9cb004b9b": "onboarding setup first run getting started agents import projects",
   "3188bc3b3c4508bc": "Privacy policy",
   "901a823214edc8c4": "telemetry analytics usage data tracking legal opt out",
-  "82136480255a5106": "OTel OTLP telemetry export endpoints logs traces metrics Grafana",
   "659d081051faf7ff": "logs traces processes resource history failures spans cpu memory",
   "5eaeacfa9f82051a": "report bug problem t3 team send feedback agents tools automatic when i ask",
   "f537f91e1ee41d47": "keyboard shortcuts hotkeys commands bindings json",

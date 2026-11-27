@@ -30,6 +30,10 @@ import * as AuthHttp from "./http.ts";
 import * as ManagedPolicy from "../policy/ManagedPolicy.ts";
 
 const DEV_TOKEN = "reusable-dev-auth-token-that-is-long-enough";
+class TestRequestError extends Schema.TaggedError<TestRequestError>()("TestRequestError", {
+  cause: Schema.Unknown,
+}) {}
+const toTestRequestError = (cause: unknown) => new TestRequestError({ cause });
 class AuthTestApi extends HttpApi.make("environment").add(EnvironmentHttpApi.groups.auth) {}
 
 const layerConfig = Layer.effect(
@@ -96,79 +100,85 @@ it.effect("sets the selected browser session cookies through the HTTP route", ()
           ] as const,
       ),
       ([environmentA, environmentB]) =>
-        Effect.promise(async () => {
-          const devResponse = await environmentA.handler(
-            postJson("/api/auth/browser-session", { credential: DEV_TOKEN }),
-            requestContext,
-          );
-          expect(devResponse.status).toBe(200);
-          const retiredScopeResponse = await environmentA.handler(
-            new Request("http://127.0.0.1/oauth/token", {
-              method: "POST",
-              body: new URLSearchParams({
-                grant_type: AuthTokenExchangeGrantType,
-                subject_token: DEV_TOKEN,
-                subject_token_type: AuthEnvironmentBootstrapTokenType,
-                requested_token_type: AuthAccessTokenType,
-                scope: "review:write",
+        Effect.tryPromise({
+          try: async () => {
+            const devResponse = await environmentA.handler(
+              postJson("/api/auth/browser-session", { credential: DEV_TOKEN }),
+              requestContext,
+            );
+            expect(devResponse.status).toBe(200);
+            const retiredScopeResponse = await environmentA.handler(
+              new Request("http://127.0.0.1/oauth/token", {
+                method: "POST",
+                body: new URLSearchParams({
+                  grant_type: AuthTokenExchangeGrantType,
+                  subject_token: DEV_TOKEN,
+                  subject_token_type: AuthEnvironmentBootstrapTokenType,
+                  requested_token_type: AuthAccessTokenType,
+                  scope: "review:write",
+                }),
               }),
-            }),
-            requestContext,
-          );
-          expect(retiredScopeResponse.status).toBe(400);
-          expect(await retiredScopeResponse.json()).toMatchObject({ reason: "invalid_scope" });
+              requestContext,
+            );
+            expect(retiredScopeResponse.status).toBe(400);
+            expect(await retiredScopeResponse.json()).toMatchObject({ reason: "invalid_scope" });
 
-          const devCookies = devResponse.headers.getSetCookie();
-          const devCookie = devCookies.find((cookie) => cookie.startsWith("t3_dev_session_"));
-          expect(devCookie).toContain("HttpOnly");
-          expect(devCookie).toContain(`=${DEV_TOKEN};`);
-          expect(devCookies).toContainEqual(
-            expect.stringMatching(/^t3_session_[^=]*=;.*Max-Age=0/),
-          );
-          expect(devCookies.filter((cookie) => /;\s*Secure/i.test(cookie))).toEqual([]);
-          const httpsResponse = await environmentA.handler(
-            postJson(
-              "/api/auth/browser-session",
-              { credential: DEV_TOKEN },
-              { "x-forwarded-proto": "https" },
-            ),
-            requestContext,
-          );
-          const httpsCookies = httpsResponse.headers.getSetCookie();
-          expect(httpsCookies).toHaveLength(2);
-          for (const cookie of httpsCookies) expect(cookie).toMatch(/;\s*Secure/i);
-          const devCookieHeader = devCookie?.split(";", 1)[0] ?? "";
-          const environmentBSession = await environmentB.handler(
-            new Request("http://127.0.0.1/api/auth/session", {
-              headers: { cookie: devCookieHeader },
-            }),
-            requestContext,
-          );
-          expect(environmentBSession.status).toBe(200);
-          expect(await environmentBSession.json()).toMatchObject({ authenticated: true });
+            const devCookies = devResponse.headers.getSetCookie();
+            const devCookie = devCookies.find((cookie) => cookie.startsWith("t3_dev_session_"));
+            expect(devCookie).toContain("HttpOnly");
+            expect(devCookie).toContain(`=${DEV_TOKEN};`);
+            expect(devCookies).toContainEqual(
+              expect.stringMatching(/^t3_session_[^=]*=;.*Max-Age=0/),
+            );
+            expect(devCookies.filter((cookie) => /;\s*Secure/i.test(cookie))).toEqual([]);
+            const httpsResponse = await environmentA.handler(
+              postJson(
+                "/api/auth/browser-session",
+                { credential: DEV_TOKEN },
+                { "x-forwarded-proto": "https" },
+              ),
+              requestContext,
+            );
+            const httpsCookies = httpsResponse.headers.getSetCookie();
+            expect(httpsCookies).toHaveLength(2);
+            for (const cookie of httpsCookies) expect(cookie).toMatch(/;\s*Secure/i);
+            const devCookieHeader = devCookie?.split(";", 1)[0] ?? "";
+            const environmentBSession = await environmentB.handler(
+              new Request("http://127.0.0.1/api/auth/session", {
+                headers: { cookie: devCookieHeader },
+              }),
+              requestContext,
+            );
+            expect(environmentBSession.status).toBe(200);
+            expect(await environmentBSession.json()).toMatchObject({ authenticated: true });
 
-          const pairingResponse = await environmentA.handler(
-            postJson(
-              "/api/auth/pairing-token",
-              { scopes: ["orchestration:read"] },
-              { cookie: devCookieHeader },
-            ),
-            requestContext,
-          );
-          expect(pairingResponse.status).toBe(200);
-          const pairing = (await pairingResponse.json()) as { credential: string };
-          const restrictedResponse = await environmentA.handler(
-            postJson("/api/auth/browser-session", { credential: pairing.credential }),
-            requestContext,
-          );
-          expect(restrictedResponse.status).toBe(200);
-          const restrictedCookies = restrictedResponse.headers.getSetCookie();
-          expect(restrictedCookies).toHaveLength(1);
-          expect(restrictedCookies[0]).toMatch(/^t3_session_/);
-          expect(restrictedCookies[0]).not.toContain("t3_dev_session_");
+            const pairingResponse = await environmentA.handler(
+              postJson(
+                "/api/auth/pairing-token",
+                { scopes: ["orchestration:read"] },
+                { cookie: devCookieHeader },
+              ),
+              requestContext,
+            );
+            expect(pairingResponse.status).toBe(200);
+            const pairing = (await pairingResponse.json()) as { credential: string };
+            const restrictedResponse = await environmentA.handler(
+              postJson("/api/auth/browser-session", { credential: pairing.credential }),
+              requestContext,
+            );
+            expect(restrictedResponse.status).toBe(200);
+            const restrictedCookies = restrictedResponse.headers.getSetCookie();
+            expect(restrictedCookies).toHaveLength(1);
+            expect(restrictedCookies[0]).toMatch(/^t3_session_/);
+            expect(restrictedCookies[0]).not.toContain("t3_dev_session_");
+          },
+          catch: toTestRequestError,
         }),
       ([environmentA, environmentB]) =>
-        Effect.promise(() => Promise.all([environmentA.dispose(), environmentB.dispose()])),
+        Effect.tryPromise({
+          try: () => Promise.all([environmentA.dispose(), environmentB.dispose()]),
+          catch: toTestRequestError,
+        }),
     );
   }).pipe(Effect.provide(Layer.mergeAll(NodeServices.layer, NodeCrypto.layer))),
 );
@@ -189,19 +199,23 @@ it.effect.each(["DPoP", "dpop"])("challenges a refused %s request with DPoP", (s
     return yield* Effect.acquireUseRelease(
       Effect.sync(() => HttpRouter.toWebHandler(layerRoutes, { disableLogger: true })),
       (environment) =>
-        Effect.promise(async () => {
-          const refused = await environment.handler(
-            postJson(
-              "/api/auth/pairing-token",
-              { scopes: ["orchestration:read"] },
-              { authorization: `${scheme} not-a-valid-token` },
-            ),
-            requestContext,
-          );
-          expect(refused.status).toBe(401);
-          expect(refused.headers.get("www-authenticate")).toBe("DPoP");
+        Effect.tryPromise({
+          try: async () => {
+            const refused = await environment.handler(
+              postJson(
+                "/api/auth/pairing-token",
+                { scopes: ["orchestration:read"] },
+                { authorization: `${scheme} not-a-valid-token` },
+              ),
+              requestContext,
+            );
+            expect(refused.status).toBe(401);
+            expect(refused.headers.get("www-authenticate")).toBe("DPoP");
+          },
+          catch: toTestRequestError,
         }),
-      (environment) => Effect.promise(() => environment.dispose()),
+      (environment) =>
+        Effect.tryPromise({ try: () => environment.dispose(), catch: toTestRequestError }),
     );
   }).pipe(Effect.provide(Layer.mergeAll(NodeServices.layer, NodeCrypto.layer))),
 );
@@ -238,30 +252,37 @@ it.live("checks token-endpoint DPoP proofs without writing replay state", () =>
     return yield* Effect.acquireUseRelease(
       Effect.sync(() => HttpRouter.toWebHandler(layerRoutes, { disableLogger: true })),
       (environment) =>
-        Effect.promise(async () => {
-          const unknownToken = await environment.handler(
-            tokenRequest("not-a-pairing-token", key.sign({ method: "POST", url, token: "", iat })),
-            requestContext,
-          );
-          expect(unknownToken.status).toBe(401);
-          expect(await unknownToken.json()).not.toHaveProperty("dpopFailureReason");
+        Effect.tryPromise({
+          try: async () => {
+            const unknownToken = await environment.handler(
+              tokenRequest(
+                "not-a-pairing-token",
+                key.sign({ method: "POST", url, token: "", iat }),
+              ),
+              requestContext,
+            );
+            expect(unknownToken.status).toBe(401);
+            expect(await unknownToken.json()).not.toHaveProperty("dpopFailureReason");
 
-          const accepted = await environment.handler(
-            tokenRequest(DEV_TOKEN, key.sign({ method: "POST", url, token: "", iat })),
-            requestContext,
-          );
-          expect(accepted.status).toBe(200);
-          expect(await accepted.json()).toMatchObject({ token_type: "DPoP" });
+            const accepted = await environment.handler(
+              tokenRequest(DEV_TOKEN, key.sign({ method: "POST", url, token: "", iat })),
+              requestContext,
+            );
+            expect(accepted.status).toBe(200);
+            expect(await accepted.json()).toMatchObject({ token_type: "DPoP" });
 
-          const badProof = await environment.handler(
-            tokenRequest(DEV_TOKEN, "not-a-proof"),
-            requestContext,
-          );
-          expect(badProof.status).toBe(401);
-          expect(badProof.headers.get("www-authenticate")).toBe("DPoP");
-          expect(written).toEqual([]);
+            const badProof = await environment.handler(
+              tokenRequest(DEV_TOKEN, "not-a-proof"),
+              requestContext,
+            );
+            expect(badProof.status).toBe(401);
+            expect(badProof.headers.get("www-authenticate")).toBe("DPoP");
+            expect(written).toEqual([]);
+          },
+          catch: toTestRequestError,
         }),
-      (environment) => Effect.promise(() => environment.dispose()),
+      (environment) =>
+        Effect.tryPromise({ try: () => environment.dispose(), catch: toTestRequestError }),
     );
   }).pipe(Effect.provide(Layer.mergeAll(NodeServices.layer, NodeCrypto.layer))),
 );

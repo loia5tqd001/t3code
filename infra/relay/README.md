@@ -136,17 +136,12 @@ The repository must define these Actions secrets shared by relay deployments:
 - `CLOUDFLARE_API_TOKEN`
 - `PLANETSCALE_API_TOKEN_ID`
 - `PLANETSCALE_API_TOKEN`
-- `AXIOM_TOKEN`
 
 The `production` GitHub environment must define these Actions variables:
 
 - `RELAY_API_ZONE_NAME`
 - `RELAY_TUNNEL_ZONE_NAME`
 - `RELAY_DOMAIN` if overriding the derived production relay domain
-- `RELAY_ALERT_NOTIFIER_ID`, the Axiom notifier that relay alerts page. Without it the deployment
-  creates no monitors or health dashboard. See
-  [Relay alerts](../../docs/operations/relay-observability.md#alerts).
-- `RELAY_WARNING_NOTIFIER_ID`, optional, the Axiom notifier for relay warnings
 - `CLERK_PUBLISHABLE_KEY`
 - `CLERK_JWT_AUDIENCE`
 - `CLERK_JWT_TEMPLATE`
@@ -164,11 +159,10 @@ The `production` GitHub environment must define these Actions secrets:
   T3 Chat account link is off. Local and preview stages can set `T3CHAT_URL` to point
   at another T3 Chat deployment; production uses `https://t3.chat`.
 
-The account-scoped repository credentials are consumed by Alchemy while provisioning relay stages; they
-are not bound into the relay Worker. The production deployment uses an Axiom personal access token,
-so `AXIOM_ORG_ID` must accompany `AXIOM_TOKEN`. The release workflow reads the production relay's
-derived public URL and Clerk publishable key from the same environment for downstream desktop, CLI,
-and hosted web builds.
+The account-scoped repository credentials are consumed by Alchemy while provisioning relay stages;
+they are not bound into the relay Worker. This fork does not deploy Axiom monitoring or trace
+workloads. The release workflow reads the production relay's derived public URL and Clerk publishable
+key from the same environment for downstream desktop, CLI, and hosted web builds.
 
 See:
 

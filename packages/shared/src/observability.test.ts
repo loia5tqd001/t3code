@@ -1,4 +1,4 @@
-import { assert, describe, expect, it } from "@effect/vitest";
+import { assert, describe, it } from "@effect/vitest";
 import * as NodeServices from "@effect/platform-node/NodeServices";
 import * as Cause from "effect/Cause";
 import * as Effect from "effect/Effect";
@@ -6,7 +6,6 @@ import * as Deferred from "effect/Deferred";
 import * as Fiber from "effect/Fiber";
 import * as Exit from "effect/Exit";
 import * as FileSystem from "effect/FileSystem";
-import { cast } from "effect/Function";
 import * as Layer from "effect/Layer";
 import * as Logger from "effect/Logger";
 import * as Path from "effect/Path";
@@ -14,28 +13,17 @@ import * as Ref from "effect/Ref";
 import * as References from "effect/References";
 import * as Schema from "effect/Schema";
 import * as Tracer from "effect/Tracer";
-import type { OtlpTracer } from "effect/observability";
 
 import {
   causeErrorTag,
   compactTraceAttributes,
-  decodeOtlpTraceRecords,
   errorTag,
   makeLocalFileTracer,
   makeTraceSink,
   type EffectTraceRecord,
   type TraceRecord,
-  OtlpHeadersFromString,
   truncateTraceAttributes,
-  processServiceInstanceId,
 } from "./observability.ts";
-
-describe("processServiceInstanceId", () => {
-  it("stays the same for the process unless the operator set one", () => {
-    expect(processServiceInstanceId()).toBe(processServiceInstanceId({}));
-    expect(processServiceInstanceId({ "service.instance.id": "pod-7" })).toBe("pod-7");
-  });
-});
 
 describe("errorTag", () => {
   it("reports structural tags without retaining arbitrary values", () => {
@@ -568,91 +556,5 @@ describe("observability", () => {
         assert.equal(records[0]?.exit?._tag, "Interrupted");
       }),
     );
-  });
-});
-
-describe("decodeOtlpTraceRecords", () => {
-  it("decodes spans when OTLP/JSON omits unset and empty fields", () => {
-    // Protobuf JSON leaves out unset and empty fields, so this batch is valid.
-    const payload = cast<unknown, OtlpTracer.TraceData>({
-      resourceSpans: [
-        {},
-        {
-          scopeSpans: [
-            {},
-            {
-              spans: [
-                {
-                  traceId: "trace-1",
-                  spanId: "span-1",
-                  name: "browser.request",
-                  startTimeUnixNano: "1000000",
-                  endTimeUnixNano: "3000000",
-                  attributes: [{ key: "tags", value: { arrayValue: {} } }],
-                },
-              ],
-            },
-          ],
-        },
-      ],
-    });
-
-    assert.deepStrictEqual(decodeOtlpTraceRecords(cast<unknown, OtlpTracer.TraceData>({})), []);
-    assert.deepStrictEqual(decodeOtlpTraceRecords(payload), [
-      {
-        type: "otlp-span",
-        name: "browser.request",
-        traceId: "trace-1",
-        spanId: "span-1",
-        sampled: true,
-        kind: "internal",
-        startTimeUnixNano: "1000000",
-        endTimeUnixNano: "3000000",
-        durationMs: 2,
-        attributes: { tags: [] },
-        resourceAttributes: {},
-        scope: { attributes: {} },
-        events: [],
-        links: [],
-        status: { code: "0" },
-      },
-    ]);
-  });
-});
-
-describe("OtlpHeadersFromString", () => {
-  const decode = Schema.decodeUnknownSync(OtlpHeadersFromString);
-
-  it.each([
-    {
-      name: "decodes percent-encoded values",
-      input: "authorization=Basic%20abc%3D%3D,x-tenant=t3",
-      expected: { authorization: "Basic abc==", "x-tenant": "t3" },
-    },
-    {
-      name: "ignores whitespace around separators",
-      input: "authorization=Basic%20abc%3D%3D, x-tenant = t3 ,",
-      expected: { authorization: "Basic abc==", "x-tenant": "t3" },
-    },
-    {
-      name: "keeps literal equals signs inside a value",
-      input: "authorization=Bearer abc==",
-      expected: { authorization: "Bearer abc==" },
-    },
-    {
-      name: "keeps an empty value",
-      input: "x-empty=",
-      expected: { "x-empty": "" },
-    },
-  ])("$name", ({ input, expected }) => {
-    expect(decode(input)).toEqual(expected);
-  });
-
-  it.each([
-    { name: "rejects a pair without a separator", input: "authorization" },
-    { name: "rejects a pair without a key", input: "=value" },
-    { name: "rejects a malformed percent-encoding", input: "authorization=%E0" },
-  ])("$name", ({ input }) => {
-    expect(() => decode(input)).toThrow();
   });
 });

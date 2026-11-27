@@ -56,9 +56,9 @@ export const FeedbackSubmitResult = Schema.Struct({
 });
 
 export const FEEDBACK_AWAITING_APPROVAL_NOTE =
-  "The user sees this report in a card and chooses there whether to send it and whether to include the conversation. Nothing is sent until they do, and you will not learn their choice. Do not wait for it or send it another way. Call again only if the user asks to change it; that shows a new card.";
+  "The user sees this report in a card and chooses there whether to save it and whether to include the conversation. It stays on this machine. You will not learn their choice. Do not wait for it. Call again only if the user asks to change it; that shows a new card.";
 
-/** What `t3_feedback` answers for a requested report: shown to the user, not yet sent. */
+/** What `t3_feedback` answers for a requested report: shown to the user, not yet saved. */
 export const FeedbackAwaitingApproval = Schema.Struct({
   status: Schema.Literal("awaiting_approval"),
   note: Schema.String,
@@ -91,11 +91,11 @@ export class FeedbackLimitError extends Schema.TaggedError<FeedbackLimitError>()
   override get message() {
     switch (this.scope) {
       case "turn":
-        return `This turn already sent ${MAX_REPORTS_PER_TURN} agent feedback reports; nothing was sent.`;
+        return `This turn already saved ${MAX_REPORTS_PER_TURN} agent feedback reports; nothing was saved.`;
       case "cards":
         return `This turn already showed the user ${MAX_REPORTS_PER_TURN} agent feedback reports to approve; nothing was shown.`;
       case "hour":
-        return `This machine already sent ${MAX_REPORTS_OUTSIDE_TURNS_PER_HOUR} agent feedback reports outside a turn in the last hour; nothing was sent.`;
+        return `This machine already saved ${MAX_REPORTS_OUTSIDE_TURNS_PER_HOUR} agent feedback reports outside a turn in the last hour; nothing was saved.`;
     }
   }
 }
@@ -106,8 +106,8 @@ export class FeedbackNotRequestedError extends Schema.TaggedError<FeedbackNotReq
 ) {
   override get message() {
     return this.source === "cli"
-      ? "Agent feedback is set to When I ask: ask your agent in a thread to send it, so you can approve what is sent."
-      : "Agent feedback is set to When I ask: send a report only when the user asks for one.";
+      ? "Agent feedback is set to When I ask: ask your agent in a thread to prepare it, so you can choose what is saved."
+      : "Agent feedback is set to When I ask: save a report only when the user asks for one.";
   }
 }
 

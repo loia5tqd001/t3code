@@ -567,6 +567,8 @@ export function ThreadRelationshipsPanel(props: {
     ...(archivedShells ?? []),
   ];
   const graph = deriveThreadRelationshipGraph({ threads: shells, projection });
+  const settledSideChat = (row: ThreadRelationshipWalkRow) =>
+    graph.nodes.get(row.threadId)?.thread?.settledOverride === "settled";
   const isHiddenRelation = (threadId: ThreadId) =>
     hiddenKeys.has(threadKey({ environmentId: props.environmentId, threadId }));
   // While hiding, an unloaded parent, fork or transfer may be hidden; unloaded subagent
@@ -636,6 +638,8 @@ export function ThreadRelationshipsPanel(props: {
     if (edge.kind !== "subagent" || isParent) return "related";
     return isFinishedAgentStatus(edge.status) ? "previous" : "active";
   });
+  const activeSideChats = sideChats.filter((row) => !settledSideChat(row));
+  const settledSideChats = sideChats.filter(settledSideChat);
   const { remoteActive = [], remotePrevious = [] } = groupBy(
     (projection?.subagents ?? [])
       .filter((agent): agent is RemoteSubagent => agent.remoteChild !== undefined)
@@ -1140,11 +1144,23 @@ export function ThreadRelationshipsPanel(props: {
           <ThreadLineageGroup
             key={`${scopedThreadKey(ref)}:side-chats`}
             label={null}
-            rows={sideChats}
+            rows={activeSideChats}
             expanded
           >
             {(visibleRows) => visibleRows.map(renderRelationshipRow)}
           </ThreadLineageGroup>
+          {settledSideChats.length === 0 ? null : (
+            <div className="opacity-50" data-thread-settled-side-chats>
+              <ThreadLineageGroup
+                key={`${scopedThreadKey(ref)}:settled-side-chats`}
+                label={gt("Settled side chats")}
+                rows={settledSideChats}
+                expanded
+              >
+                {(visibleRows) => visibleRows.map(renderRelationshipRow)}
+              </ThreadLineageGroup>
+            </div>
+          )}
         </ThreadDetailsSection>
       ) : null}
     </>

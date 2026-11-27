@@ -987,6 +987,42 @@ it("a subagent tab shows its read-only bar under no header of its own", async ()
     .toBeVisible();
 });
 
+it("offers Un-settle beside Delete once a side chat is settled", async () => {
+  const parent = threadWithHistory("settle-parent", 1);
+  const side = {
+    ...threadWithHistory("settle-side", 1),
+    sideChatOf: parent.id,
+  };
+  const settledSide = {
+    ...side,
+    olderSettled: true as const,
+  };
+  await page.viewport(1400, 900);
+  using _environment = installFakeEnvironment([parent, settledSide]);
+  __setClientSettingsForTests({
+    ...DEFAULT_CLIENT_SETTINGS,
+    onboardingCompletedAt: "2026-01-01T00:00:00.000Z",
+  });
+  const parentRef = scopeThreadRef(ENVIRONMENT_ID, parent.id);
+  useRightPanelStore.getState().openThread(parentRef, side.id);
+  const router = getRouter(
+    createMemoryHistory({ initialEntries: [`/${ENVIRONMENT_ID}/${parent.id}`] }),
+  );
+  await router.load();
+  await using screen = await render(<AppRoot router={router} />, {
+    router: false,
+  });
+
+  const pane = screen.getByTestId("side-thread-pane");
+  const settle = pane.getByRole("button", { name: "Un-settle side chat" });
+  const deleteButton = pane.getByRole("button", { name: "Delete side chat" });
+  await expect.element(settle).toBeVisible();
+  await expect.element(deleteButton).toBeVisible();
+  expect(settle.element().compareDocumentPosition(deleteButton.element())).toBe(
+    Node.DOCUMENT_POSITION_FOLLOWING,
+  );
+});
+
 it("/side sends the draft's attachments and context, and keeps them when it does not start", async () => {
   await page.viewport(1400, 900);
   const thread = threadWithHistory("side-attachments", 1);

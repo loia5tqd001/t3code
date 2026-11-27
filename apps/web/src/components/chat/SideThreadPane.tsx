@@ -10,11 +10,12 @@ import { AuthOrchestrationOperateScope, type ScopedThreadRef } from "@t3tools/co
 import { threadContextRecord } from "@t3tools/shared/composerContextReferences";
 import { useRouter } from "@tanstack/react-router";
 import { T, useGT } from "gt-react";
-import { ArrowUpRightIcon, Trash2Icon, XIcon } from "lucide-react";
+import { ArrowUpRightIcon, CircleCheckIcon, Trash2Icon, Undo2Icon, XIcon } from "lucide-react";
 import { useEffect, useState } from "react";
 
 import { useComposerDraftStore } from "../../composerDraftStore";
 import { ComposerHandleContext } from "../../composerHandleContext";
+import { useThreadActions } from "../../hooks/useThreadActions";
 import { useClientSettings } from "../../hooks/useSettings";
 import { releaseComposerDraftUploads } from "../../lib/composerDraftUploads";
 import type { SideChatParentPanel } from "../../lib/sideChatPane";
@@ -37,6 +38,7 @@ import { useOpenThreadFamily } from "../ThreadRouteView";
 import { useAtomCommand } from "../../state/use-atom-command";
 import ChatView from "../ChatView";
 import { Button } from "../ui/button";
+import { Spinner } from "../ui/spinner";
 import { toastManager } from "../ui/toast";
 import { Tooltip, TooltipPopup, TooltipTrigger } from "../ui/tooltip";
 import { BackgroundThreadContext } from "./backgroundThread";
@@ -91,8 +93,10 @@ export default function SideThreadPane(props: {
   const promoteSideChat = useAtomCommand(threadEnvironment.promoteSideChat, {
     reportFailure: false,
   });
+  const { settleThread, unsettleThread } = useThreadActions();
   const confirmThreadDelete = useClientSettings((settings) => settings.confirmThreadDelete);
   const [deleting, setDeleting] = useState(false);
+  const [settling, setSettling] = useState(false);
   const [promoting, setPromoting] = useState(false);
   // Closing an unused side chat deletes it, which would leave the link unreadable.
   const canAddToChat = shell !== null && shell.latestUserMessageAt !== null;
@@ -173,6 +177,24 @@ export default function SideThreadPane(props: {
     });
   };
 
+  const threadSettled = shell?.settledOverride === "settled";
+  const toggleSettled = async () => {
+    if (!canOperate || shell === null || settling) return;
+    setSettling(true);
+    const result = threadSettled ? await unsettleThread(threadRef) : await settleThread(threadRef);
+    setSettling(false);
+    if (result._tag === "Failure" && !isAtomCommandInterrupted(result)) {
+      const error = squashAtomCommandFailure(result);
+      toastManager.add({
+        type: "error",
+        title: threadSettled
+          ? gt("Could not un-settle the side chat")
+          : gt("Could not settle the side chat"),
+        ...(error instanceof Error ? { description: error.message } : {}),
+      });
+    }
+  };
+
   const title =
     thread === null
       ? isSideChat
@@ -234,6 +256,33 @@ export default function SideThreadPane(props: {
               </TooltipPopup>
             </Tooltip>
           ) : null}
+          <Tooltip>
+            <TooltipTrigger
+              render={
+                <Button
+                  variant="ghost"
+                  size="xs"
+                  aria-label={threadSettled ? gt("Un-settle side chat") : gt("Settle side chat")}
+                  disabled={!canOperate || shell === null || settling}
+                  onClick={() => void toggleSettled()}
+                >
+                  {settling ? (
+                    <Spinner aria-hidden size="xs" />
+                  ) : threadSettled ? (
+                    <Undo2Icon aria-hidden className="size-3.5" />
+                  ) : (
+                    <CircleCheckIcon aria-hidden className="size-3.5" />
+                  )}
+                  <span className="hidden sm:inline">
+                    {threadSettled ? <T>Un-settle</T> : <T>Settle</T>}
+                  </span>
+                </Button>
+              }
+            />
+            <TooltipPopup side="bottom">
+              {threadSettled ? <T>Un-settle side chat</T> : <T>Settle side chat</T>}
+            </TooltipPopup>
+          </Tooltip>
           <Button
             variant="ghost"
             size="icon-xs"

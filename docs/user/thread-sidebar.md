@@ -351,10 +351,12 @@ while the thread is busy, once you have sent a message in the side chat. An agen
 an external OpenCode server cannot read the link, so put the details in your message
 instead.
 
-Closing a side chat you never sent a message in deletes it. To delete one you used,
-choose **Delete** at the top of the side chat. Deleting a thread also deletes its
-side chats. Archiving a thread also archives its side chats and stops their work, and
-unarchiving the thread brings them back.
+Closing a side chat you never sent a message in deletes it. To keep one you used
+without leaving it among active side chats, choose **Settle** at the top of the
+side chat. Settled side chats move below active ones under **Settled side chats**,
+and **Un-settle** restores one. To permanently remove a side chat, choose **Delete**.
+Deleting a thread also deletes its side chats. Archiving a thread also archives its
+side chats and stops their work, and unarchiving the thread brings them back.
 
 On mobile, a thread lists its side chats above the composer. Tap one to open it and
 answer its questions.

@@ -170,6 +170,7 @@ const isFinishedAgentStatus = (status: string | null | undefined) =>
 
 function ThreadLineageGroup<Row extends LineageRow>(props: {
   readonly label: string | null;
+  readonly showLabelIcon?: boolean;
   readonly rows: ReadonlyArray<Row>;
   readonly expanded: boolean;
   readonly children: (rows: ReadonlyArray<Row>) => ReactNode;
@@ -186,7 +187,9 @@ function ThreadLineageGroup<Row extends LineageRow>(props: {
     <div>
       {props.label ? (
         <ThreadDetailsControl aria-expanded={expanded} onClick={() => setExpanded(!expanded)}>
-          <BotIcon aria-hidden className={THREAD_DETAILS_PANEL_ICON_CLASS} />
+          {props.showLabelIcon === false ? null : (
+            <BotIcon aria-hidden className={THREAD_DETAILS_PANEL_ICON_CLASS} />
+          )}
           <span className={cn(THREAD_DETAILS_PANEL_LABEL_CLASS, "min-w-0 flex-1 truncate")}>
             {props.label}
           </span>
@@ -1154,6 +1157,7 @@ export function ThreadRelationshipsPanel(props: {
               <ThreadLineageGroup
                 key={`${scopedThreadKey(ref)}:settled-side-chats`}
                 label={gt("Settled side chats")}
+                showLabelIcon={false}
                 rows={settledSideChats}
                 expanded
               >

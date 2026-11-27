@@ -374,10 +374,12 @@ it("puts settled side chats below active ones with a dimmed group", async () => 
     .getByText("Settled side chats", { exact: true })
     .element()
     .closest("[data-thread-settled-side-chats]");
+  const settledHeading = screen.getByRole("button", { name: "Settled side chats" }).element();
 
   expect(active.compareDocumentPosition(settled)).toBe(Node.DOCUMENT_POSITION_FOLLOWING);
   expect(settledGroup).not.toBeNull();
   expect(window.getComputedStyle(settledGroup!).opacity).toBe("0.5");
+  expect(settledHeading.querySelectorAll("svg")).toHaveLength(1);
 });
 
 it("shows a remote subagent's full title in its tooltip even when its environment is unavailable", async () => {

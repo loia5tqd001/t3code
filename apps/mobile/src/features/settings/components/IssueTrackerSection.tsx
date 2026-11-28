@@ -231,15 +231,15 @@ export function IssueTrackerProjectRows(props: {
   if (held && !saving && !props.refreshing && !props.refreshFailed) setPicks({});
   const busy = saving || (held && props.refreshing);
   const bound = (projectId: ProjectId) =>
-    picks[projectId] ?? boundIssueTrackerScopes(tracker, props.bindings[projectId]);
+    picks[projectId] ?? boundIssueTrackerScopes(tracker.tracker, props.bindings[projectId]);
   const change = async (projectId: ProjectId, scopes: ReadonlyArray<string>) => {
     if (props.disabled || busy) return;
-    const binding = issueTrackerBindingFor(tracker, bound(projectId), scopes);
+    const binding = issueTrackerBindingFor(tracker.tracker, bound(projectId), scopes);
     const before = picks[projectId];
     setSaving(true);
     setPicks((current) => ({
       ...current,
-      [projectId]: boundIssueTrackerScopes(tracker, binding ?? undefined),
+      [projectId]: boundIssueTrackerScopes(tracker.tracker, binding ?? undefined),
     }));
     const result = await bind({ environmentId, input: { projectId, binding } });
     if (result._tag !== "Success") setPicks((current) => ({ ...current, [projectId]: before }));

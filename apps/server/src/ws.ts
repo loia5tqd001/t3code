@@ -257,6 +257,7 @@ import * as PullRequestService from "./pullRequest/PullRequestService.ts";
 import * as IssueService from "./issue/IssueService.ts";
 import * as ThreadIssueService from "./orchestration-v2/ThreadIssueService.ts";
 import * as IssueTrackerConnections from "./issue/IssueTrackerConnections.ts";
+import * as PullRequestReviewGuideService from "./pullRequest/PullRequestReviewGuideService.ts";
 import { listLinkedPullRequestThreads } from "./pullRequest/linkedThreads.ts";
 import { pullRequestSyncKey } from "./pullRequest/pullRequestSyncKey.ts";
 import * as SqlClient from "effect/sql/SqlClient";
@@ -1401,6 +1402,7 @@ export const layerWsRpc = (
       const issues = yield* IssueService.IssueService;
       const threadIssues = yield* ThreadIssueService.ThreadIssueService;
       const issueTrackers = yield* IssueTrackerConnections.IssueTrackerConnections;
+      const reviewGuides = yield* PullRequestReviewGuideService.PullRequestReviewGuideService;
       const pullRequestSync = yield* PullRequestSyncReactor.PullRequestSyncReactor;
       const deviceService = yield* DeviceService.DeviceService;
       const deviceHostContext =
@@ -2743,6 +2745,10 @@ export const layerWsRpc = (
           withPullRequestViewer(input, pullRequests.checks(input)),
         [WS_METHODS.pullRequestsActivity]: (input) =>
           withPullRequestViewer(input, openedPullRequestRead(pullRequests.activity(input))),
+        [WS_METHODS.pullRequestsReviewGuide]: (input) =>
+          withPullRequestViewer(input, reviewGuides.get(input)),
+        [WS_METHODS.pullRequestsGenerateReviewGuide]: (input) =>
+          withPullRequestViewer(input, reviewGuides.generate(input)),
         [WS_METHODS.pullRequestsThreadComments]: (input) =>
           withPullRequestViewer(input, pullRequests.threadComments(input)),
         [WS_METHODS.pullRequestsDiffFileContents]: (input) =>
@@ -3585,6 +3591,7 @@ export const layer = Layer.unwrap(
     const issues = yield* IssueService.IssueService;
     const threadIssues = yield* ThreadIssueService.ThreadIssueService;
     const issueTrackers = yield* IssueTrackerConnections.IssueTrackerConnections;
+    const reviewGuides = yield* PullRequestReviewGuideService.PullRequestReviewGuideService;
     const peerLinks = yield* PeerLinks.PeerLinks;
     const peerLinkRequests = yield* PeerLinkRequests.PeerLinkRequests;
     const peerThreadRelay = yield* PeerThreadRelay.PeerThreadRelay;
@@ -3653,6 +3660,12 @@ export const layer = Layer.unwrap(
               Layer.provide(Layer.succeed(ThreadIssueService.ThreadIssueService, threadIssues)),
               Layer.provide(
                 Layer.succeed(IssueTrackerConnections.IssueTrackerConnections, issueTrackers),
+              ),
+              Layer.provide(
+                Layer.succeed(
+                  PullRequestReviewGuideService.PullRequestReviewGuideService,
+                  reviewGuides,
+                ),
               ),
               Layer.provide(Layer.succeed(PeerLinks.PeerLinks, peerLinks)),
               Layer.provide(Layer.succeed(PeerLinkRequests.PeerLinkRequests, peerLinkRequests)),

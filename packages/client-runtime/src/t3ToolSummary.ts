@@ -647,6 +647,23 @@ export function summarizeT3ToolCalls(
           );
       break;
     }
+    case "read-pr-guide": {
+      const count = selected.length;
+      label = done
+        ? resolve(
+            msg(
+              "{count, plural, one {Read {count} review guide} other {Read {count} review guides}}",
+              { count },
+            ),
+          )
+        : resolve(
+            msg(
+              "{count, plural, one {Tried to read {count} review guide} other {Tried to read {count} review guides}}",
+              { count },
+            ),
+          );
+      break;
+    }
     case "list-issues": {
       const count = selected.length;
       label = done
@@ -1493,6 +1510,74 @@ export function summarizeT3ToolCalls(
               msg(
                 "{count, plural, one {Tried to check linked pull requests {count} time} other {Tried to check linked pull requests {count} times}}",
                 { count },
+              ),
+            );
+      }
+      break;
+    }
+    case "write-pr-guides": {
+      // One call writes many guides, and reports a refusal per guide rather than failing.
+      const outcomes = selected.flatMap((call) =>
+        Array.isArray(call.output?.guides)
+          ? call.output.guides.map((guide) => asRecord(guide)?.outcome)
+          : [],
+      );
+      const started = outcomes.filter((outcome) => outcome !== "failed").length;
+      const failed = outcomes.length - started;
+      failedCount += failed;
+      if (outcomes.length === 0) {
+        const count = selected.length;
+        label =
+          count === 1
+            ? done
+              ? resolve(msg("Started writing review guides"))
+              : resolve(msg("Tried to start writing review guides"))
+            : done
+              ? resolve(
+                  msg(
+                    "{count, plural, one {Started writing review guides {count} time} other {Started writing review guides {count} times}}",
+                    { count },
+                  ),
+                )
+              : resolve(
+                  msg(
+                    "{count, plural, one {Tried to start writing review guides {count} time} other {Tried to start writing review guides {count} times}}",
+                    { count },
+                  ),
+                );
+      } else if (started === 0) {
+        label = resolve(
+          msg(
+            "{failed, plural, one {Could not start {failed} review guide} other {Could not start {failed} review guides}}",
+            { failed },
+          ),
+        );
+      } else if (failed > 0) {
+        label = done
+          ? resolve(
+              msg(
+                "{started, plural, one {Started {started} review guide, {failed} failed} other {Started {started} review guides, {failed} failed}}",
+                { started, failed },
+              ),
+            )
+          : resolve(
+              msg(
+                "{started, plural, one {Tried to start {started} review guide, {failed} failed} other {Tried to start {started} review guides, {failed} failed}}",
+                { started, failed },
+              ),
+            );
+      } else {
+        label = done
+          ? resolve(
+              msg(
+                "{started, plural, one {Started {started} review guide} other {Started {started} review guides}}",
+                { started },
+              ),
+            )
+          : resolve(
+              msg(
+                "{started, plural, one {Tried to start {started} review guide} other {Tried to start {started} review guides}}",
+                { started },
               ),
             );
       }

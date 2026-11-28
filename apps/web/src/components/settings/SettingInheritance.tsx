@@ -59,10 +59,12 @@ function formatValue(
         : key === "defaultModelSelection"
           ? resolve(msg("Automatic"))
           : key === "sourceControlWriterModelSelection"
-            ? resolve(msg("Source control writer model"))
-            : key === "defaultThreadEnvMode" || key === "worktreeSubmodules"
-              ? resolve(msg("Inherit"))
-              : resolve(msg("Not set"));
+            ? resolve(msg("Text generation model"))
+            : key === "reviewGuideModelSelection"
+              ? resolve(msg("Source control writer model"))
+              : key === "defaultThreadEnvMode" || key === "worktreeSubmodules"
+                ? resolve(msg("Inherit"))
+                : resolve(msg("Not set"));
   }
   if (typeof value === "boolean") {
     return value

@@ -599,9 +599,9 @@
       "types": "./src/sourceControlClients.ts",
       "default": "./src/sourceControlClients.ts"
     },
-    "./file-diff-rows": {
-      "types": "./src/fileDiffRows.ts",
-      "default": "./src/fileDiffRows.ts"
+    "./review-guide-tour": {
+      "types": "./src/reviewGuideTour.ts",
+      "default": "./src/reviewGuideTour.ts"
     },
     "./state/query-persistence": {
       "types": "./src/state/queryPersistence.ts",

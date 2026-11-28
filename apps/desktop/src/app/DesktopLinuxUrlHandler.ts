@@ -58,7 +58,7 @@ const escapeDesktopEntryString = (value: string): string =>
     .replaceAll("\t", "\\t");
 
 // Exec values undergo general unescaping then Exec unquoting; escape in reverse order.
-function escapeDesktopEntryExecArgument(value: string): string {
+export function escapeDesktopEntryExecArgument(value: string): string {
   const quoted = value
     .replaceAll("\\", () => "\\\\")
     .replaceAll("`", () => "\\`")

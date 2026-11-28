@@ -57,6 +57,19 @@ type OpenQuestionAttachmentDraft = {
 
 const openQuestionDrafts = new Map<string, OpenQuestionAttachmentDraft>();
 
+export function openQuestionAttachmentDraft(
+  threadRef: ScopedThreadRef,
+): OpenQuestionAttachmentDraft | null {
+  return openQuestionDrafts.get(scopedThreadKey(threadRef)) ?? null;
+}
+
+export function countQuestionRequestAttachments(draftId: DraftId): number | null {
+  for (const draft of openQuestionDrafts.values()) {
+    if (draft.draftId === draftId) return countQuestionAttachments(draft.requestKeys);
+  }
+  return null;
+}
+
 export function trackOpenQuestionAttachmentDraft(
   threadRef: ScopedThreadRef,
   draft: OpenQuestionAttachmentDraft,

@@ -625,7 +625,6 @@ function itemIcon(item: OrchestrationV2TurnItem): ThreadFeedActivity["icon"] {
     case "link_request":
       return "globe";
   }
-  return "zap";
 }
 
 function itemToolPresentation(
@@ -726,7 +725,6 @@ function itemSummary(
     case "assistant_message":
       return resolve(msg("Assistant message"));
   }
-  return "";
 }
 
 function itemPreview(item: OrchestrationV2TurnItem, resolve: MessageResolver): string | null {
@@ -787,7 +785,6 @@ function itemPreview(item: OrchestrationV2TurnItem, resolve: MessageResolver): s
     case "assistant_message":
       return item.text || null;
   }
-  return null;
 }
 
 function toWorkLogEntry(

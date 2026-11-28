@@ -427,6 +427,9 @@ importers:
       '@clerk/electron-passkeys':
         specifier: 0.0.3
         version: 0.0.3
+      '@crowecawcaw/xa11y':
+        specifier: 0.15.4
+        version: 0.15.4
       '@effect/platform-node':
         specifier: 4.1.5
         version: 4.1.5(bufferutil@4.1.0)(effect@4.1.5(patch_hash=24395ce5abc3df3a44cceace2bb247cfe7d201e82b099212372b9347de142f28))(redis@6.2.1)(utf-8-validate@6.0.6)

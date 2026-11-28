@@ -3,6 +3,7 @@ import { scopedProjectKey, scopeProjectRef } from "@t3tools/client-runtime/envir
 import {
   Outlet,
   Link,
+  redirect,
   createRootRoute,
   type ErrorComponentProps,
   useLocation,
@@ -26,6 +27,7 @@ import { FirstRunGate } from "../components/onboarding/FirstRunGate";
 import { ConnectOnboardingDialog } from "../components/cloud/ConnectOnboardingDialog";
 import { RelayClientInstallDialog } from "../components/cloud/RelayClientInstallDialog";
 import { SshPasswordPromptDialog } from "../components/desktop/SshPasswordPromptDialog";
+import { SnapShotCoordinator } from "../components/desktop/SnapShotCoordinator";
 import { DesktopAppActivationCoordinator } from "../components/desktop/DesktopAppActivationCoordinator";
 import { DesktopWebLinkCoordinator } from "../components/desktop/DesktopWebLinkCoordinator";
 import { RunningThreadKeepAlive } from "../components/desktop/RunningThreadKeepAlive";
@@ -55,7 +57,9 @@ import { useAtomValue } from "@effect/atom-react";
 import { primaryServerConfigAtom, primaryServerWelcomeAtom } from "../state/server";
 import { readProject } from "../state/entities";
 
+import { getDesktopSnapShotBridge } from "../lib/desktopSnapShot";
 import { isChunkLoadError } from "../lib/chunkReloadGuard";
+import { shouldResumeSnapShotSetupOnStartup } from "../lib/snapShotSetupResume";
 
 export const Route = createRootRoute({
   beforeLoad: async ({ location }) => {
@@ -86,6 +90,14 @@ export const Route = createRootRoute({
     }
 
     const authGateState = await resolveInitialServerAuthGateState();
+    if (
+      authGateState.status === "authenticated" &&
+      getDesktopSnapShotBridge() &&
+      shouldResumeSnapShotSetupOnStartup() &&
+      location.pathname !== "/settings/snap-shot"
+    ) {
+      throw redirect({ to: "/settings/snap-shot", replace: true });
+    }
     return {
       authGateState,
     };
@@ -179,6 +191,7 @@ function RootRouteBranch() {
       <RelayClientInstallDialog />
       <ConnectOnboardingDialog />
       <SshPasswordPromptDialog />
+      <SnapShotCoordinator />
       <ReopenClosedViewShortcut />
       <ConfirmDialogHost />
       <CustomSnoozeDialogHost />

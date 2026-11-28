@@ -4,6 +4,7 @@ import { vi } from "vite-plus/test";
 import {
   EnvironmentId,
   AuthSourceControlWriteScope,
+  AuthOrchestrationOperateScope,
   ProjectId,
   PullRequestOperationError,
   SourceControlProviderKind,
@@ -2268,6 +2269,49 @@ it.effect("denies a routed write when only the origin has source-control permiss
   }),
 );
 
+it.effect("publishes the accepted guide run before the follow-up read finishes", () =>
+  Effect.gen(function* () {
+    const accepted = {
+      guide: null,
+      currentHeadSha: "head",
+      run: { _tag: "Running" as const, headSha: "head", startedAt: "2026-10-11T00:00:00.000Z" },
+    };
+    let reads = 0;
+    const refreshStarted = yield* Latch.make();
+    const client = {
+      [WS_METHODS.pullRequestsSubscribeRefreshes]: () => Stream.never,
+      [WS_METHODS.pullRequestsReviewGuide]: () =>
+        Effect.gen(function* () {
+          if (++reads > 1) {
+            yield* refreshStarted.open;
+            return yield* Effect.never;
+          }
+          return { guide: null, run: null, currentHeadSha: "head" };
+        }),
+      [WS_METHODS.pullRequestsGenerateReviewGuide]: () => Effect.succeed(accepted),
+    } as unknown as WsRpcProtocolClient;
+    const { atoms, registry } = yield* makeTestRuntime(client);
+    const target = {
+      environmentId: TARGET.environmentId,
+      input: { projectId: ProjectId.make("project-1"), repository: "acme/web", number: 1 },
+    };
+    registry.update(
+      grantedSessions(target.environmentId),
+      AsyncResult.map((session) => ({
+        ...session,
+        scopes: [...(session.scopes ?? []), AuthOrchestrationOperateScope],
+      })),
+    );
+    const query = atoms.reviewGuide(target);
+    registry.mount(query);
+    yield* AtomRegistry.getResult(registry, query, { suspendOnWaiting: true });
+    const result = yield* Effect.exit(atoms.generateReviewGuide.run(registry, target));
+    expect(result._tag).toBe("Success");
+    yield* refreshStarted.await;
+    expect(AsyncResult.getOrElse(registry.get(query), () => null)).toEqual(accepted);
+  }),
+);
+
 const listResult = (entries: ReadonlyArray<object>) => ({
   entries,
   viewers: {},
@@ -2973,7 +3017,7 @@ it.effect("paints a saved stack answer at once while the host read is out", () =
   ),
 );
 
-it.effect("loads the diff again for a new cache head without sending the head", () =>
+it.effect("loads the diff again for a new guide head without sending the head", () =>
   Effect.gen(function* () {
     const inputs: unknown[] = [];
     const { atoms, registry, supervisor } = yield* makeTestRuntime(

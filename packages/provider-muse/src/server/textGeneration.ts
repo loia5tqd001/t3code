@@ -25,6 +25,7 @@ import { isMuseUsageLimitFailure } from "./usageLimits.ts";
 import type { ProviderTextGeneration } from "@t3tools/provider-core/server/textGeneration";
 import {
   generatedThreadTitle,
+  investigationUnsupported,
   TranscriptionPostProcessingOutput,
 } from "@t3tools/provider-core/server/textGenerationOperations";
 import {
@@ -391,11 +392,14 @@ export const makeMuseTextGeneration = Effect.fn("makeMuseTextGeneration")(functi
         modelSelection: input.modelSelection,
       });
     });
+  const generateReviewGuide: ProviderTextGeneration["generateReviewGuide"] = () =>
+    Effect.fail(investigationUnsupported("generateReviewGuide", "Muse Code"));
   return {
     generateCommitMessage,
     generatePrContent,
     generateBranchName,
     generateThreadTitle,
+    generateReviewGuide,
     generateTranscriptionPostProcessing,
   } satisfies ProviderTextGeneration;
 });

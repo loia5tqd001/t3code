@@ -39,6 +39,20 @@ import { resolveAttachmentPath } from "../attachmentStore.ts";
 import * as ServerConfig from "../config.ts";
 
 const CLAUDE_TIMEOUT_MS = 180_000;
+/** `--tools` takes bare names; patterns go in the allow list. */
+const CLAUDE_INVESTIGATION_TOOLS = "Read,Grep,Glob,Bash";
+/** In dontAsk mode every call outside this list, Bash included, is refused. */
+const CLAUDE_INVESTIGATION_ALLOWED = [
+  "Read",
+  "Grep",
+  "Glob",
+  "Bash(git diff:*)",
+  "Bash(git log:*)",
+  "Bash(git show:*)",
+].join(",");
+// Denies override allows; block git --output/-o because allowed trailing args can otherwise write anywhere.
+const CLAUDE_INVESTIGATION_DENIED = ["Bash(git * --output*)", "Bash(git * -o *)"].join(",");
+
 const NO_SESSION_PERSISTENCE = "--no-session-persistence";
 // Claude Code before 2.0.63 exits with this on stderr; those runs retry without the flag.
 const NO_SESSION_PERSISTENCE_REJECTED = `error: unknown option '${NO_SESSION_PERSISTENCE}'`;
@@ -174,6 +188,7 @@ export const makeClaudeTextGeneration = Effect.fn("makeClaudeTextGeneration")(fu
     prompt,
     outputSchema: outputSchemaJson,
     modelSelection,
+    investigate,
     attachments,
   }: TextGenerationOperations.Request<S>): Effect.fn.Return<
     S["Type"],
@@ -286,8 +301,17 @@ export const makeClaudeTextGeneration = Effect.fn("makeClaudeTextGeneration")(fu
           ...(cliEffort ? ["--effort", cliEffort] : []),
           "--settings",
           settingsJson,
-          "--tools",
-          "",
+          ...(investigate
+            ? [
+                "--tools",
+                CLAUDE_INVESTIGATION_TOOLS,
+                "--allowedTools",
+                CLAUDE_INVESTIGATION_ALLOWED,
+                "--disallowedTools",
+                CLAUDE_INVESTIGATION_DENIED,
+              ]
+            : ["--tools", ""]),
+          ...(investigate ? ["--setting-sources", "user"] : []),
           "--disable-slash-commands",
           ...(noSessionPersistence ? [NO_SESSION_PERSISTENCE] : []),
           // managed-mcp.json already isolates servers and makes Claude reject this flag.
@@ -379,7 +403,7 @@ export const makeClaudeTextGeneration = Effect.fn("makeClaudeTextGeneration")(fu
         );
       }),
       Effect.scoped,
-      Effect.timeoutOption(CLAUDE_TIMEOUT_MS),
+      Effect.timeoutOption(investigate?.timeoutMs ?? CLAUDE_TIMEOUT_MS),
       Effect.flatMap(
         Option.match({
           onNone: () =>

@@ -13,7 +13,7 @@ import type { Ref } from "react";
 import { DIFF_SURFACE_THEME_UNSAFE_CSS } from "~/lib/diffRendering";
 import { DiffWorkerPoolProvider } from "../DiffWorkerPoolProvider";
 
-const DIFF_VIEW_UNSAFE_CSS = `${DIFF_SURFACE_THEME_UNSAFE_CSS}
+export const DIFF_VIEW_UNSAFE_CSS = `${DIFF_SURFACE_THEME_UNSAFE_CSS}
 /* A 1fr track's automatic minimum grows with the currently mounted lines. In split
    wrap mode that shifts width between columns, rewraps rows and makes the virtualizer
    repeatedly correct the scroll position. Keep both code columns at the same width. */

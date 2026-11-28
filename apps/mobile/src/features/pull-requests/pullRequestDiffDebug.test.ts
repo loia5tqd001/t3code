@@ -11,7 +11,7 @@ import {
 import { createReviewDiffHighlightScheduler } from "../review/reviewDiffHighlightScheduler";
 import type { NativeReviewDiffViewProps } from "../diffs/nativeReviewDiffSurface";
 
-it("enters at a file header without changing row focus positioning", () => {
+it("enters at a file header without changing guide focus positioning", () => {
   expect(pullRequestDiffInitialPosition("last-file", -1)).toEqual({
     initialFileId: "last-file",
     initialRowIndex: -1,

@@ -48,6 +48,7 @@ import * as PreviewManager from "../preview/Manager.ts";
 
 import * as DeviceService from "../device/DeviceService.ts";
 import * as GitManager from "../git/GitManager.ts";
+import * as PullRequestReviewGuideService from "../pullRequest/PullRequestReviewGuideService.ts";
 import * as PullRequestService from "../pullRequest/PullRequestService.ts";
 import * as ServerConfig from "../config.ts";
 import * as ServerHttp from "../http.ts";
@@ -112,6 +113,7 @@ const layerPullRequestsTest = McpHttpServer.layerPullRequestsToolkit.pipe(
   Layer.provide(
     Layer.mergeAll(
       Layer.mock(ProjectService.ProjectService)({}),
+      Layer.mock(PullRequestReviewGuideService.PullRequestReviewGuideService)({}),
       Layer.mock(PullRequestService.PullRequestService)({}),
       Layer.mock(GitManager.GitManager)({}),
       Layer.mock(Orchestrator.OrchestratorV2)({}),
@@ -1890,6 +1892,7 @@ it.effect(
             Layer.mergeAll(
               McpToolAccessTestkit.liveThreadsLayer,
               Layer.mock(ProjectService.ProjectService)({}),
+              Layer.mock(PullRequestReviewGuideService.PullRequestReviewGuideService)({}),
               Layer.mock(PullRequestService.PullRequestService)({
                 servesProject: (projectId) => Effect.succeed(projectId !== "project-noForgeToken"),
               }),

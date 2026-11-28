@@ -1,18 +1,9 @@
 import type { PullRequestReviewPosition } from "@t3tools/contracts";
-import { unquoteGitPatchPath } from "@t3tools/shared/gitPatchPath";
+
+import { HUNK_HEADER, headerPath } from "./pullRequestReviewGuideNormalize.ts";
 
 /** `new` numbers a line in the PR's head, `old` in its base. */
 export type ReviewLineSide = "new" | "old";
-
-const HUNK_HEADER = /^@@ -(\d+)(?:,(\d+))? \+(\d+)(?:,(\d+))? @@/;
-
-function headerPath(line: string, prefix: string): string | null {
-  const rest = line.slice(4);
-  const tab = rest.indexOf("\t");
-  const token = tab === -1 ? rest : rest.slice(0, tab);
-  const path = token.startsWith('"') ? unquoteGitPatchPath(token) : token;
-  return path.startsWith(prefix) ? path.slice(prefix.length) : null;
-}
 
 /** Where a line of `path` sits in a unified patch, or null when the patch does not show it. */
 export function reviewPositionInPatch(

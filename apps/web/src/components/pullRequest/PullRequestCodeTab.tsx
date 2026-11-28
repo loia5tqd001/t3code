@@ -79,7 +79,7 @@ import {
   canEditPullRequestComment,
   canResolvePullRequestThread,
 } from "@t3tools/client-runtime/pull-request-editing";
-import { fileDiffRows } from "@t3tools/client-runtime/file-diff-rows";
+import { fileDiffRows } from "@t3tools/client-runtime/review-guide-tour";
 import { isTestChangedFile } from "@t3tools/shared/changedFileKind";
 import { orderDiffFilesForReview } from "@t3tools/client-runtime/diff-file-order";
 import { isWorkspaceImagePreviewPath } from "@t3tools/shared/mediaPreview";

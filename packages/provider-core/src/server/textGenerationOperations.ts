@@ -10,6 +10,7 @@ import {
   buildBranchNamePrompt,
   buildCommitMessagePrompt,
   buildPrContentPrompt,
+  buildReviewGuidePrompt,
   buildThreadTitlePrompt,
 } from "./textGenerationPrompts.ts";
 import {
@@ -29,11 +30,28 @@ export interface Request<S extends Schema.Top> {
   readonly outputSchema: S;
   readonly modelSelection: ModelSelection;
   readonly attachments?: ReadonlyArray<ChatAttachment> | undefined;
+  /** Investigate cwd with read-only tools across turns; fail if the runner cannot guarantee read-only access. */
+  readonly investigate?: { readonly timeoutMs: number } | undefined;
 }
+
+const INVESTIGATION_TIMEOUT_MS = 15 * 60_000;
+
+export const investigationUnsupported = (operation: Operation, provider: string) =>
+  new TextGenerationError({
+    operation,
+    detail: `${provider} cannot investigate a checkout read-only. Choose another review guide model, or source control writer model when none is set.`,
+  });
 
 export type Runner = <S extends Schema.Top>(
   request: Request<S>,
 ) => Effect.Effect<S["Type"], TextGenerationError, S["DecodingServices"]>;
+
+export const withoutInvestigation =
+  (provider: string, run: Runner): Runner =>
+  (request) =>
+    request.investigate
+      ? Effect.fail(investigationUnsupported(request.operation, provider))
+      : run(request);
 
 export const decodeJsonReply = <S extends Schema.Top>(
   request: Pick<Request<S>, "operation" | "outputSchema">,
@@ -164,11 +182,24 @@ export function fromRunner(name: string, run: Runner): ProviderTextGeneration {
       });
     });
 
+  const generateReviewGuide: ProviderTextGeneration["generateReviewGuide"] = Effect.fn(
+    `${name}.generateReviewGuide`,
+  )(function* (input) {
+    return yield* run({
+      operation: "generateReviewGuide",
+      cwd: input.cwd,
+      modelSelection: input.modelSelection,
+      investigate: { timeoutMs: INVESTIGATION_TIMEOUT_MS },
+      ...buildReviewGuidePrompt(input),
+    });
+  });
+
   return {
     generateCommitMessage,
     generatePrContent,
     generateBranchName,
     generateThreadTitle,
+    generateReviewGuide,
     generateTranscriptionPostProcessing,
   } satisfies ProviderTextGeneration;
 }

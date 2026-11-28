@@ -287,18 +287,11 @@ describe("scoped settings writes", () => {
       },
     ];
 
-    it("reports a dropped writing preference", async () => {
+    it("reports a dropped toggle", async () => {
       expect(
         await outcome(
-          planScopedSettingsPatch(all, environments, {
-            sourceControlWritingStyle: { followChangeRequestTemplates: false },
-          }),
-          upgradedLaptop({
-            sourceControlWritingStyle: {
-              ...DEFAULT_SERVER_SETTINGS.sourceControlWritingStyle,
-              followChangeRequestTemplates: false,
-            },
-          }),
+          planScopedSettingsPatch(all, environments, { reviewGuidesEnabled: true }),
+          upgradedLaptop({ reviewGuidesEnabled: true }),
         ),
       ).toEqual({ saved: [laptop.label], failed: unsupported });
     });
@@ -306,15 +299,8 @@ describe("scoped settings writes", () => {
     it("reports dropped text but accepts the server trimming it", async () => {
       expect(
         await outcome(
-          planScopedSettingsPatch(all, environments, {
-            sourceControlWritingStyle: { customInstructions: " Read tests " },
-          }),
-          upgradedLaptop({
-            sourceControlWritingStyle: {
-              ...DEFAULT_SERVER_SETTINGS.sourceControlWritingStyle,
-              customInstructions: "Read tests",
-            },
-          }),
+          planScopedSettingsPatch(all, environments, { reviewGuideInstructions: " Read tests " }),
+          upgradedLaptop({ reviewGuideInstructions: "Read tests" }),
         ),
       ).toEqual({ saved: [laptop.label], failed: unsupported });
     });
@@ -334,12 +320,7 @@ describe("scoped settings writes", () => {
     it("accepts a write that matches what the environment already had", async () => {
       expect(
         await outcome(
-          planScopedSettingsPatch(all, environments, {
-            sourceControlWritingStyle: {
-              ...DEFAULT_SERVER_SETTINGS.sourceControlWritingStyle,
-              customInstructions: "",
-            },
-          }),
+          planScopedSettingsPatch(all, environments, { reviewGuidesEnabled: false }),
           upgradedLaptop({}),
         ),
       ).toEqual({ saved: [laptop.label, server.label], failed: [] });
@@ -967,6 +948,7 @@ describe("model selection patches at project scope", () => {
         [projectId]: {
           defaultModelSelection: saved,
           sourceControlWriterModelSelection: saved,
+          reviewGuideModelSelection: saved,
           textGenerationModelSelection: saved,
         },
       },
@@ -978,11 +960,13 @@ describe("model selection patches at project scope", () => {
     const plan = planScopedSettingsPatch(checkout, [customized], {
       defaultModelSelection: { instanceId: claude, model: "claude-opus-4-8" },
       sourceControlWriterModelSelection: { instanceId: codex, model: "gpt-5.6-mini" },
+      reviewGuideModelSelection: { instanceId: codex, model: "gpt-5.6-mini" },
       textGenerationModelSelection: { instanceId: claude, model: "claude-sonnet-4-6" },
     });
     expect(plan.serverWrites[0]?.patch.projectSettingsOverrides?.[projectId]).toEqual({
       defaultModelSelection: { instanceId: claude, model: "claude-opus-4-8" },
       sourceControlWriterModelSelection: { instanceId: codex, model: "gpt-5.6-mini" },
+      reviewGuideModelSelection: { instanceId: codex, model: "gpt-5.6-mini" },
       textGenerationModelSelection: { instanceId: claude, model: "claude-sonnet-4-6" },
     });
   });

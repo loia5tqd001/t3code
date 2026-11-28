@@ -18,7 +18,6 @@ import type { FilePreviewItem } from "../../components/ui/FilePreviewModal";
 import { isBotBadgeImage } from "./botBadgeImages";
 import { PullRequestMarkdown } from "./PullRequestMarkdown";
 import { pullRequestDescriptionContent } from "./pullRequestDescriptionContent";
-import { markdownReferenceDefinitions } from "../../lib/markdownDocument";
 
 const COLLAPSED_HEIGHT = 240;
 
@@ -45,7 +44,7 @@ export function PullRequestDescription(props: {
     const document = parseMarkdownDocument(props.markdown);
     const content = pullRequestDescriptionContent(
       document,
-      splitPullRequestBody(props.markdown, markdownReferenceDefinitions),
+      splitPullRequestBody(props.markdown),
       messages,
     );
     return {

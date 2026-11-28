@@ -22,6 +22,7 @@ import {
   modelPreferencesMigrationPatch,
   resolveModelPreferences,
   isModelSelectionProviderEnabled,
+  resolveReviewGuideModelSelection,
   resolveSourceControlWriterModelSelection,
   resolveSpeechPostProcessingModelSelection,
 } from "./serverSettings.ts";
@@ -392,7 +393,7 @@ describe("serverSettings helpers", () => {
     expect(settings.sourceControlWriterModelSelection).toBe(sourceControlWriterModelSelection);
   });
 
-  it("routes source control writing and transcript cleanup to a text generator, until it is turned off", () => {
+  it("routes every text task but review guides to a text generator, until it is turned off", () => {
     const generatorId = ProviderInstanceId.make("openrouter");
     const selection = createModelSelection(generatorId, "openai/gpt-5-mini");
     const settings = (enabled: boolean) => ({
@@ -406,12 +407,22 @@ describe("serverSettings helpers", () => {
         },
       },
       sourceControlWriterModelSelection: selection,
+      reviewGuideModelSelection: selection,
       speechPostProcessingModelSelection: selection,
     });
     // A text generator has no provider snapshot; an empty list must not read as unusable.
     const on = settings(true);
     expect(resolveSourceControlWriterModelSelection(on, [], null)).toBe(selection);
     expect(resolveSpeechPostProcessingModelSelection(on, [])).toBe(selection);
+    expect(resolveReviewGuideModelSelection(on, [], null)).toBe(selection);
+    expect(
+      resolveReviewGuideModelSelection(
+        { ...on, sourceControlWriterModelSelection: null },
+        [],
+        null,
+      ),
+    ).toBe(on.textGenerationModelSelection);
+
     const off = settings(false);
     expect(resolveSourceControlWriterModelSelection(off, [], null)).toBe(
       off.textGenerationModelSelection,

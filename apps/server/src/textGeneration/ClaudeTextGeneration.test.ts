@@ -116,6 +116,30 @@ function withFakeClaudeEnv<A, E, R>(
 }
 
 it.layer(layerClaudeTextGenerationTest)("ClaudeTextGeneration", (it) => {
+  it.effect("loads only user settings when generating review guides", () =>
+    withFakeClaudeEnv(
+      {
+        output: JSON.stringify({ structured_output: { stops: [] } }),
+        argsMustContain: "--setting-sources user",
+        expectedTools: "Read,Grep,Glob,Bash",
+      },
+      (textGeneration) =>
+        textGeneration.generateReviewGuide({
+          cwd: process.cwd(),
+          number: 12,
+          title: "Review a change",
+          description: "",
+          baseBranch: "main",
+          baseCommit: "base",
+          settledReview: "",
+          modelSelection: createModelSelection(
+            ProviderInstanceId.make("claudeAgent"),
+            SYNTHETIC_CLAUDE_CAPABLE_MODEL,
+          ),
+        }),
+    ),
+  );
+
   it.effect(
     "keeps canonical built-in capabilities when a custom model collides with its alias",
     () =>

@@ -1,5 +1,6 @@
 import { isDraftThreadRoute } from "./features/threads/thread-route-state";
 import { ComponentCatalogScreen } from "./features/development/ComponentCatalogScreen";
+import { PullRequestGuideStopScreen } from "./features/pull-requests/guide/PullRequestGuideScreen";
 import { PullRequestInlineCommentScreen } from "./features/pull-requests/PullRequestInlineCommentScreen";
 import { PullRequestDiscussionScreen } from "./features/pull-requests/PullRequestDiscussionScreen";
 import { createWorkspaceStackNavigator } from "./features/layout/createWorkspaceStackNavigator";
@@ -591,6 +592,10 @@ const RootStackConfig = createWorkspaceStackNavigator({
         parse: { number: Number },
       },
       options: pageRoute({ duoMinimize: "never" }),
+    }),
+    PullRequestGuideStop: createNativeStackScreen({
+      screen: PullRequestGuideStopScreen,
+      options: pageRoute(),
     }),
     PullRequestFile: createNativeStackScreen({
       screen: PullRequestFileRouteScreen,

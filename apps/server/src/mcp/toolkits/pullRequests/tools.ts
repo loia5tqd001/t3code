@@ -12,6 +12,8 @@ import {
   PullRequestMergeMethod,
   PullRequestReviewVerdict,
   PullRequestReviewDecision,
+  PullRequestReviewGuide,
+  PullRequestReviewGuideRun,
   PullRequestState,
   PullRequestUnavailableError,
   PullRequestVisibility,
@@ -38,6 +40,7 @@ import {
   PullRequestUrlUnavailableError,
 } from "../../../pullRequest/pullRequestTarget.ts";
 import * as PullRequestService from "../../../pullRequest/PullRequestService.ts";
+import * as PullRequestReviewGuideService from "../../../pullRequest/PullRequestReviewGuideService.ts";
 
 const dependencies = [
   McpInvocationContext.McpInvocationContext,
@@ -47,6 +50,11 @@ const dependencies = [
 ];
 
 const forgeDependencies = [...dependencies, PullRequestService.PullRequestService];
+
+const guideDependencies = [
+  ...dependencies,
+  PullRequestReviewGuideService.PullRequestReviewGuideService,
+];
 
 const watchDependencies = [...dependencies, PullRequestWatchService.PullRequestWatchService];
 
@@ -121,6 +129,15 @@ export class PullRequestProjectNotFoundError extends Schema.TaggedError<PullRequ
   }
 }
 
+export class PullRequestGuideFailedError extends Schema.TaggedError<PullRequestGuideFailedError>()(
+  "PullRequestGuideFailedError",
+  { detail: Schema.String, cause: Schema.optional(Schema.Defect()) },
+) {
+  override get message(): string {
+    return this.detail;
+  }
+}
+
 export class PullRequestForgeError extends Schema.TaggedError<PullRequestForgeError>()(
   "PullRequestForgeError",
   { detail: Schema.optional(Schema.String), cause: Schema.optional(Schema.Defect()) },
@@ -172,6 +189,7 @@ export const PullRequestToolError = Schema.Union([
   PullRequestUnavailableError,
   PullRequestWatchService.PullRequestWatchFromSubagentError,
   PullRequestProjectNotFoundError,
+  PullRequestGuideFailedError,
   PullRequestForgeError,
   PullRequestBranchHasNoneError,
   PullRequestNothingToDoError,
@@ -411,6 +429,71 @@ const UnwatchPullRequestTool = Tool.make("unwatch_pull_request", {
   .annotate(Tool.Idempotent, true)
   .annotate(Tool.OpenWorld, false)
   .annotate(McpSchema.EnabledWhen, McpInvocationContext.hiddenFromSubagents);
+
+const GuideTarget = Schema.Struct({
+  url: PullRequestTargetInput.fields.url,
+  repository: PullRequestTargetInput.fields.repository,
+  number: PullRequestTargetInput.fields.number,
+  host: PullRequestTargetInput.fields.host,
+});
+
+const GuideOutcome = Schema.Struct({
+  ...PullRequestIdentity,
+  outcome: Schema.Literals(["started", "running", "failed"]).annotate({
+    description: "started: a run began. running: joined a run for this head. failed: see detail.",
+  }),
+  detail: Schema.NullOr(Schema.String),
+});
+
+export const WritePullRequestGuidesResult = Schema.Struct({
+  guides: Schema.Array(GuideOutcome),
+});
+export type WritePullRequestGuidesResult = typeof WritePullRequestGuidesResult.Type;
+
+export const ReadPullRequestGuideResult = Schema.Struct({
+  ...PullRequestIdentity,
+  guide: Schema.NullOr(PullRequestReviewGuide),
+  run: Schema.NullOr(PullRequestReviewGuideRun),
+  currentHeadSha: Schema.NullOr(Schema.String),
+  stale: Schema.Boolean.annotate({
+    description: "True when the PR head moved after the guide was written.",
+  }),
+});
+export type ReadPullRequestGuideResult = typeof ReadPullRequestGuideResult.Type;
+
+const WritePullRequestGuidesTool = Tool.make("write_pull_request_guides", {
+  description:
+    "Write review guides for up to 20 PRs (the tour in the PR Guide tab). Returns once runs start. Each run takes minutes in a temporary checkout. A run for the same head is joined. Read with `read_pull_request_guide`. Fails while guides are off.",
+  parameters: Schema.Struct({
+    environmentId: OrchestratorMcpEnvironmentTarget,
+    pullRequests: Schema.Array(GuideTarget).check(Schema.isMinLength(1), Schema.isMaxLength(20)),
+  }),
+  success: WritePullRequestGuidesResult,
+  failure: PullRequestToolError,
+  dependencies: guideDependencies,
+})
+  .annotate(Tool.Title, "Write pull request guides")
+  .annotate(Tool.Readonly, false)
+  .annotate(Tool.Destructive, false)
+  .annotate(Tool.Idempotent, false)
+  .annotate(Tool.OpenWorld, true);
+
+const ReadPullRequestGuideTool = Tool.make("read_pull_request_guide", {
+  description:
+    "Read a PR's stored review guide and run state. `guide` is null when none exists. Never starts a run.",
+  parameters: Schema.Struct({
+    environmentId: OrchestratorMcpEnvironmentTarget,
+    ...GuideTarget.fields,
+  }),
+  success: ReadPullRequestGuideResult,
+  failure: PullRequestToolError,
+  dependencies: guideDependencies,
+})
+  .annotate(Tool.Title, "Read pull request guide")
+  .annotate(Tool.Readonly, true)
+  .annotate(Tool.Destructive, false)
+  .annotate(Tool.Idempotent, true)
+  .annotate(Tool.OpenWorld, true);
 
 export const ThreadPullRequestInput = Schema.Struct({
   environmentId: OrchestratorMcpEnvironmentTarget,
@@ -802,6 +885,8 @@ export const PullRequestsToolkit = Toolkit.make(
   ListThreadPullRequestsTool,
   WatchPullRequestTool,
   UnwatchPullRequestTool,
+  WritePullRequestGuidesTool,
+  ReadPullRequestGuideTool,
   ReadPullRequestTool,
   ListPullRequestsTool,
   CreatePullRequestTool,

@@ -690,14 +690,14 @@ it.layer(NodeServices.layer)("build-desktop-artifact", (it) => {
       resolveMergedStageDependencies({
         platform: "linux",
         serverDependencies: { "@ff-labs/fff-node": "0.9.4", "node-pty": "1.1.0", effect: "4.0.0" },
-        desktopDependencies: { "ffi-rs": "1.3.2" },
+        desktopDependencies: { "@crowecawcaw/xa11y": "0.13.0" },
         arch: "x64",
         fffNodeVersion: "0.9.4",
       }),
       {
         "@ff-labs/fff-node": "0.9.4",
         "node-pty": "1.1.0",
-        "ffi-rs": "1.3.2",
+        "@crowecawcaw/xa11y": "0.13.0",
         "@ff-labs/fff-bin-linux-x64-gnu": "0.9.4",
         "@ff-labs/fff-bin-linux-x64-musl": "0.9.4",
       },

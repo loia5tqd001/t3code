@@ -119,7 +119,7 @@ export const make = Effect.gen(function* () {
           }),
         )) satisfies TextGenerationOperations.Runner;
     }
-    return runnerFor(config);
+    return TextGenerationOperations.withoutInvestigation(label, runnerFor(config));
   });
 
   const listModels = Effect.fn("TextGenerators.listModels")(

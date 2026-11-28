@@ -29,6 +29,8 @@ export type {
   CommitMessageGenerationResult,
   PrContentGenerationInput,
   PrContentGenerationResult,
+  ReviewGuideGenerationInput,
+  ReviewGuideGenerationResult,
   ThreadTitleGenerationInput,
   ThreadTitleGenerationResult,
   TranscriptionPostProcessingInput,
@@ -44,6 +46,7 @@ type TextGenerationOp =
   | "generatePrContent"
   | "generateBranchName"
   | "generateThreadTitle"
+  | "generateReviewGuide"
   | "generateTranscriptionPostProcessing";
 
 const resolveInstance = (
@@ -64,6 +67,9 @@ const resolveInstance = (
     ),
   );
 
+// Review guides investigate the checkout read-only; the other drivers reject that request.
+const INVESTIGATING_DRIVERS = new Set(["codex", "claudeAgent"]);
+
 /** @public */
 export const make = Effect.gen(function* () {
   const registry = yield* ProviderInstanceRegistry.ProviderInstanceRegistry;
@@ -81,7 +87,11 @@ export const make = Effect.gen(function* () {
     ) => Effect.Effect<A, TextGenerationError>,
   ) {
     const textGenerator = yield* textGenerators.runner(selection.instanceId);
-    if (textGenerator !== undefined) {
+    // A review guide reaches a text generator only through a fallback; it needs an agent instead.
+    const textGeneratorId = selection.instanceId;
+    const textGeneratorCannotRun =
+      textGenerator !== undefined && operation === "generateReviewGuide";
+    if (textGenerator !== undefined && !textGeneratorCannotRun) {
       return yield* invoke(
         TextGenerationOperations.fromRunner("TextGenerator", textGenerator),
         selection,
@@ -97,6 +107,7 @@ export const make = Effect.gen(function* () {
     const selectedDisabled = selected?.enabled === false;
     // Only a failed probe counts: a pending one is also not installed yet.
     const unusable =
+      textGeneratorCannotRun ||
       selectedDisabled ||
       (selected?.enabled === true &&
         (!isProviderTextGenerationCapable(selected) ||
@@ -132,6 +143,7 @@ export const make = Effect.gen(function* () {
               isProviderTextGenerationCapable(provider) &&
               provider.models.find((candidate) => candidate.slug === model)
                 ?.supportsTextGeneration !== false &&
+              (operation !== "generateReviewGuide" || INVESTIGATING_DRIVERS.has(driver)) &&
               !exhaustedUsageWindow(provider, now, model)
             );
           },
@@ -139,6 +151,13 @@ export const make = Effect.gen(function* () {
         );
       // Another instance first; the rejected instance's other models only when none qualifies.
       selection = fallbackWhere(false) ?? fallbackWhere(true) ?? selection;
+    }
+    if (textGeneratorCannotRun && selection.instanceId === textGeneratorId) {
+      return yield* new TextGenerationError({
+        operation,
+        detail:
+          "Review guides need a coding agent that can read the checkout. None is ready. Pick Codex or Claude as the review guide model in Settings → Source control & issues.",
+      });
     }
     if (selectedDisabled && selection.instanceId === selected.instanceId) {
       return yield* new TextGenerationError({
@@ -177,6 +196,14 @@ export const make = Effect.gen(function* () {
         input.modelSelection,
         input.projectId,
         (service, modelSelection) => service.generateBranchName({ ...input, modelSelection }),
+      );
+    }),
+    generateReviewGuide: Effect.fn("TextGeneration.generateReviewGuide")(function (input) {
+      return generate(
+        "generateReviewGuide",
+        input.modelSelection,
+        input.projectId,
+        (service, modelSelection) => service.generateReviewGuide({ ...input, modelSelection }),
       );
     }),
     generateTranscriptionPostProcessing: Effect.fn(

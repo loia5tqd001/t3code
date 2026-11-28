@@ -12,6 +12,8 @@ const DISPLAY_NAMES: ReadonlyMap<string, string> = new Map([
   ["Check linked pull requests", msg("Check linked pull requests")],
   ["Watch a pull request", msg("Watch a pull request")],
   ["Stop watching a pull request", msg("Stop watching a pull request")],
+  ["Write review guides", msg("Write review guides")],
+  ["Read a review guide", msg("Read a review guide")],
   ["Read a pull request", msg("Read a pull request")],
   ["List pull requests", msg("List pull requests")],
   ["Open a pull request", msg("Open a pull request")],

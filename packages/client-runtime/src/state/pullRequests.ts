@@ -5,6 +5,7 @@ import {
   PullRequestActivity,
   PullRequestDetail as PullRequestDetailSchema,
   PullRequestPreview,
+  PullRequestReviewGuideResult,
   PullRequestStack,
   PullRequestListResult,
   PullRequestChecks,
@@ -770,6 +771,7 @@ export interface PullRequestAnswerHandlers {
   readonly detail?: QueryAnswerHandler<PullRequestRef, PullRequestDetail>;
   readonly filesViewed?: QueryAnswerHandler<PullRequestRef, PullRequestFilesViewedResult>;
   readonly checks?: QueryAnswerHandler<PullRequestRef, PullRequestChecks | null>;
+  readonly reviewGuide?: QueryAnswerHandler<PullRequestRef, PullRequestReviewGuideResult>;
   /** Once per action reply, after the loaded readers show it; unscoped references only. */
   readonly actionReply?: QueryAnswerHandler<PullRequestRef, PullRequestSummary>;
   readonly acceptedEdit?: QueryAnswerHandler<PullRequestRef, PullRequestPendingEdit>;
@@ -1053,6 +1055,17 @@ export function createPullRequestEnvironmentAtoms<R, E>(
       },
     };
   };
+  const reviewGuide = writableQueryFamily(
+    createEnvironmentRpcQueryAtomFamily(runtime, {
+      label: "environment-data:pull-requests:review-guide",
+      persistence: persistQuery(PullRequestReviewGuideResult),
+      tag: WS_METHODS.pullRequestsReviewGuide,
+      execute: (input) => routedRequest(WS_METHODS.pullRequestsReviewGuide, input),
+      staleTimeMs: 60_000,
+      refreshTrigger: ({ environmentId }) => refreshes({ environmentId, input: {} }),
+      ...(onAnswer.reviewGuide === undefined ? {} : { onAnswer: onAnswer.reviewGuide }),
+    }),
+  );
   const reviewerCandidates = writableQueryFamily(
     createEnvironmentRpcQueryAtomFamily(runtime, {
       label: "environment-data:pull-requests:reviewer-candidates",
@@ -1284,6 +1297,7 @@ export function createPullRequestEnvironmentAtoms<R, E>(
       label: "environment-data:pull-requests:diff",
       persistence: persistQuery(PullRequestDiffResult),
       staleTimeMs: 60_000,
+      // A guide tied to a commit must not reuse another push's cached pages.
       execute: ({
         cacheHeadSha: _cacheHeadSha,
         ...input
@@ -1506,6 +1520,16 @@ export function createPullRequestEnvironmentAtoms<R, E>(
             }),
             missingIdentities,
           );
+        }),
+    }),
+    reviewGuide,
+    generateReviewGuide: createEnvironmentRpcCommand(runtime, {
+      label: "environment-data:pull-requests:generate-review-guide",
+      tag: WS_METHODS.pullRequestsGenerateReviewGuide,
+      execute: (input) => routedRequest(WS_METHODS.pullRequestsGenerateReviewGuide, input),
+      onSuccess: (target, registry, result) =>
+        Effect.sync(() => {
+          updateCached(registry, reviewGuide(target), () => result, true);
         }),
     }),
     labelCandidates,

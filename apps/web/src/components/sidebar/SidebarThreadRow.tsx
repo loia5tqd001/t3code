@@ -1389,8 +1389,9 @@ const SidebarThreadRow = memo(function SidebarThreadRow(props: SidebarThreadRowP
                 className={cn(
                   rowSurfaceClassName,
                   multiline
-                    ? "flex flex-col justify-center px-2.5 py-1.5"
-                    : "flex h-9 items-center gap-2.5 px-2.5",
+                    ? "flex flex-col justify-center py-1.5"
+                    : "flex h-9 items-center gap-2.5",
+                  inFolder ? "ps-3.5 pe-2.5" : "px-2.5",
                 )}
                 onClick={handleClick}
                 onDoubleClick={handleDoubleClick}

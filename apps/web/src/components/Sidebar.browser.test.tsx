@@ -491,6 +491,10 @@ describe("sidebar environment labels", () => {
 
   it("keeps folder rows one line and omits pull request metadata", async () => {
     using stack = new DisposableStack();
+    const style = document.createElement("style");
+    style.textContent = appCss;
+    document.head.append(style);
+    stack.defer(() => style.remove());
     const previousSettings = getClientSettings();
     stack.defer(() => __setClientSettingsForTests(previousSettings));
     __setClientSettingsForTests({
@@ -533,6 +537,7 @@ describe("sidebar environment labels", () => {
     }
     const firstRow = screen.getByTestId("sidebar-row-folder").filter({ hasText: "Thread 0" });
     expect((await firstRow.element()).className).not.toContain("ps-9");
+    expect(getComputedStyle(await firstRow.element()).paddingInlineStart).toBe("14px");
     await expect.element(screen.getByText("#42")).not.toBeInTheDocument();
   });
 

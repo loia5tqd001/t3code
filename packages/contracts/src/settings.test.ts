@@ -129,6 +129,12 @@ describe("storage cleanup settings", () => {
   });
 });
 
+describe("ClientSettings sidebar defaults", () => {
+  it("enables the boring sidebar by default", () => {
+    expect(decodeClientSettings({}).boringSidebarEnabled).toBe(true);
+  });
+});
+
 describe("ClientSettings terminal close confirmation", () => {
   it("keeps confirmation enabled for settings without a saved preference", () => {
     expect(decodeClientSettings({}).confirmTerminalClose).toBe(true);

@@ -90,22 +90,6 @@ const T3_TOOL_SENTENCES: ReadonlyMap<string, T3ToolSentence> = new Map<string, T
     },
   ],
   [
-    "Write\nWriting\nStarted writing\nreview guides",
-    {
-      detail: msg(
-        "{status, select, inProgress {Writing review guides} completed {Started writing review guides} failed {Failed to write review guides} declined {Declined to write review guides} stopped {Stopped writing review guides} other {Writing review guides}}",
-      ),
-    },
-  ],
-  [
-    "Read\nReading\nRead\na review guide",
-    {
-      detail: msg(
-        "{status, select, inProgress {Reading a review guide} completed {Read a review guide} failed {Failed to read a review guide} declined {Declined to read a review guide} stopped {Stopped reading a review guide} other {Reading a review guide}}",
-      ),
-    },
-  ],
-  [
     "List\nListing\nListed\nissues",
     {
       detail: msg(

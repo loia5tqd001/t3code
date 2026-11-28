@@ -287,7 +287,6 @@ import { ComposerCommandMenuLayer } from "./ComposerCommandMenuLayer";
 import { useRestingComposerControlsLayout } from "./useRestingComposerControlsLayout";
 import { useProviderWorkspaceSnapshotRefresh } from "./useProviderWorkspaceSnapshotRefresh";
 import { useComposerProviderModel } from "./useComposerProviderModel";
-import { useComposerImageGroups } from "./useComposerImageGroups";
 import { useComposerStash } from "./useComposerStash";
 import { useComposerContextImport } from "./useComposerContextImport";
 import { useComposerAttachmentIntake } from "./useComposerAttachmentIntake";
@@ -676,7 +675,7 @@ export const ChatComposer = memo(function ChatComposer(props: ChatComposerProps)
     : undefined;
   const attachmentDraftTarget = questionAttachmentTarget ?? composerDraftTarget;
   const attachmentDraft = useComposerThreadDraft(attachmentDraftTarget);
-  const questionTakesSnapShots =
+  const questionTakesAttachments =
     supportsQuestionAttachments &&
     activePendingProgress?.activeQuestion?.allowCustomAnswer !== false &&
     !activePendingIsResponding;
@@ -684,7 +683,7 @@ export const ChatComposer = memo(function ChatComposer(props: ChatComposerProps)
   // Publish eligibility before async captures can observe a question the UI has already closed.
   // oxlint-disable-next-line t3code/no-unreasoned-state-sync -- registers the open question's attachment draft in the module tracker before async captures read it
   useLayoutEffect(() => {
-    if (!questionAttachmentTarget || !questionRequest || !questionTakesSnapShots) return;
+    if (!questionAttachmentTarget || !questionRequest || !questionTakesAttachments) return;
     return trackOpenQuestionAttachmentDraft(routeThreadRef, {
       draftId: questionAttachmentTarget,
       requestKeys: questionRequest.questions.map((question) =>
@@ -701,7 +700,7 @@ export const ChatComposer = memo(function ChatComposer(props: ChatComposerProps)
     environmentId,
     questionAttachmentTarget,
     questionRequest,
-    questionTakesSnapShots,
+    questionTakesAttachments,
     routeThreadRef,
   ]);
   const attachmentTargetKey = composerTargetKey(attachmentDraftTarget);
@@ -745,12 +744,12 @@ export const ChatComposer = memo(function ChatComposer(props: ChatComposerProps)
   const composerReviewComments = composerDraft.reviewComments;
   const composerThreadContexts = attachmentDraft.threadContexts;
   const composerEnvironmentContexts = composerDraft.environmentContexts;
-  const {
-    pendingSnapShotAnimations,
-    pendingSnapShotIds,
-    uncommittedSnapShotIds,
-    standaloneComposerImages,
-  } = useComposerImageGroups(attachmentDraftTarget, composerImages, composerPreviewAnnotations);
+  const previewAnnotationIds = new Set(
+    composerPreviewAnnotations.map((annotation) => annotation.id),
+  );
+  const standaloneComposerImages = composerImages.filter(
+    (image) => !previewAnnotationIds.has(image.id),
+  );
   const allPreparingComposerImages = usePreparingComposerImages(attachmentTargetKey);
   const preparingComposerImages = allPreparingComposerImages.filter((image) => !image.hidden);
   // A message send waits for these itself; an answer waits in the composer below.
@@ -3577,8 +3576,7 @@ export const ChatComposer = memo(function ChatComposer(props: ChatComposerProps)
   // Built outside the form's JSX so typing, which rebuilds that JSX, leaves them cached.
   const composerAttachmentMediaRow =
     !isComposerCollapsedMobile &&
-    (uncommittedSnapShotIds.length > 0 ||
-      composerVideos.length > 0 ||
+    (composerVideos.length > 0 ||
       standaloneComposerImages.length > 0 ||
       preparingComposerImages.length > 0) ? (
       <ComposerAttachmentMediaRow
@@ -3586,11 +3584,7 @@ export const ChatComposer = memo(function ChatComposer(props: ChatComposerProps)
         expandedImages={standaloneComposerImages}
         preparingImages={preparingComposerImages}
         videos={composerVideos}
-        pendingSnapShotAnimations={pendingSnapShotAnimations}
-        pendingSnapShotIds={pendingSnapShotIds}
-        uncommittedSnapShotIds={uncommittedSnapShotIds}
         nonPersistedImageIds={nonPersistedComposerImageIds}
-        snapShotAnimations={settings.snapShotAnimations}
         supportsAttachmentUploads={supportsAttachmentUploads}
         maxFileAttachmentBytes={maxFileAttachmentBytes}
         environmentId={environmentId}

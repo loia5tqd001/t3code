@@ -23,7 +23,6 @@ import {
   MessageCircleQuestionIcon,
   MoreHorizontalIcon,
   RotateCcwIcon,
-  ScrollTextIcon,
   Trash2Icon,
 } from "lucide-react";
 import { Branch, msg, T, useGT, useMessages } from "gt-react";
@@ -83,10 +82,6 @@ export function PullRequestActionsMenu({
   canFixFindings,
   startFixFindings,
   handoffLabels,
-  canWriteGuide,
-  guideRunning,
-  guideWritten,
-  writeGuide,
   pickableEnvironments,
   actingEnvironmentId,
   onActingEnvironmentChange,
@@ -136,10 +131,6 @@ export function PullRequestActionsMenu({
   canFixFindings: boolean;
   startFixFindings: () => void;
   handoffLabels: { readonly fixFindings: string };
-  canWriteGuide: boolean;
-  guideRunning: boolean;
-  guideWritten: boolean;
-  writeGuide: () => void;
   pickableEnvironments: ReadonlyArray<PickableEnvironment>;
   actingEnvironmentId: EnvironmentId;
   onActingEnvironmentChange: (environmentId: EnvironmentId) => void;
@@ -304,16 +295,6 @@ export function PullRequestActionsMenu({
           <HammerIcon className="size-3.5" />
           {handoff === "findings" ? gt("Preparing...") : handoffLabels.fixFindings}
         </MenuItem>
-        {canWriteGuide ? (
-          <MenuItem disabled={guideRunning} onClick={writeGuide}>
-            <ScrollTextIcon className="size-3.5" />
-            {guideRunning
-              ? gt("Writing guide...")
-              : !guideWritten
-                ? gt("Write guide")
-                : gt("Rewrite guide")}
-          </MenuItem>
-        ) : null}
         {pickableEnvironments.length > 0 ? (
           <ActOnEnvironmentPicker
             environments={pickableEnvironments}

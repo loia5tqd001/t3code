@@ -6,6 +6,7 @@ import { isProviderSkillUserInvocable } from "@t3tools/client-runtime/providerSk
 import { sourceControlClients } from "@t3tools/client-runtime/source-control-clients";
 import { filePreviewKind } from "@t3tools/shared/filePreview";
 import { videoMimeType } from "@t3tools/shared/video";
+import { markdownMathRanges } from "@t3tools/shared/markdownMath";
 import { msg } from "gt-react-native";
 import { m } from "../i18n/messages";
 import {
@@ -222,7 +223,12 @@ export function composerContextEditorTokens(
       !references.some((ref) => token.start < ref.end && token.end > ref.start) &&
       !citations.some((ref) => token.start < ref.end && token.end > ref.start),
   );
-  const taken = [...inlineTokens, ...references, ...citations, ...composerMathRanges(text)];
+  const taken = [
+    ...inlineTokens,
+    ...references,
+    ...citations,
+    ...composerMathRanges(text, markdownMathRanges),
+  ];
   const models = modelTokens.filter(
     (mention) => !taken.some((range) => mention.start < range.end && mention.end > range.start),
   );

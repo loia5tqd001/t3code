@@ -157,8 +157,6 @@ describe("searchSettings", () => {
       "publish-agent-activity",
       "provider-health-check-interval",
       "source-control-writer-model",
-      "review-guide-model",
-      "review-guide-instructions",
       "source-control-writing-style",
       "t3-connect",
       "hold-webhooks-while-offline",

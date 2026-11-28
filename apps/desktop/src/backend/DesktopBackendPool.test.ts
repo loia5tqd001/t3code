@@ -213,9 +213,7 @@ function layerPool(
           handleBackendReady: () => options.onReady ?? Effect.void,
           handleBackendNotReady: Effect.void,
           flushMainWindowBounds: Effect.void,
-          prepareCaptureReveal: Effect.void,
           dispatchMenuAction: () => Effect.die("unexpected menu action"),
-          dispatchSnapShotEvent: () => Effect.void,
           zoomMain: () => Effect.die("unexpected zoom"),
           runMainContentsCommand:
             options.onMainContentsCommand ?? (() => Effect.die("unexpected main contents command")),

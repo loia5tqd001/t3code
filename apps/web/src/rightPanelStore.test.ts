@@ -1172,14 +1172,14 @@ describe("rightPanelStore", () => {
     const otherEnvironment = scopeThreadRef("env-2" as EnvironmentId, refA.threadId);
     const selections = [
       [refA, pr, "code"],
-      [refB, pr, "guide"],
+      [refB, pr, "summary"],
       [otherEnvironment, pr, "timeline"],
       [refA, otherPr, "summary"],
     ] as const;
     const store = useRightPanelStore.getState();
     for (const [ref, reference, tab] of selections) {
       store.openPullRequest(ref, reference);
-      store.setPullRequestDetailTab(ref, pullRequestSurfaceId(reference), "guide");
+      store.setPullRequestDetailTab(ref, pullRequestSurfaceId(reference), "summary");
       store.setPullRequestDetailTab(ref, pullRequestSurfaceId(reference), tab);
     }
 

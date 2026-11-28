@@ -31,7 +31,7 @@ describe("mobile PR test file filter", () => {
     expect(parsed.files).toHaveLength(4);
   });
 
-  it("keeps a guide's target test file visible without exposing other hidden tests", () => {
+  it("keeps a linked test file visible without exposing other hidden tests", () => {
     const parsed = buildReviewParsedDiff(
       ["src/first.test.ts", "src/app.ts", "src/second.test.ts"].map(patch).join("\n"),
       "pr",

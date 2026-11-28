@@ -348,8 +348,5 @@ export const makeCursorTextGeneration = Effect.fn("makeCursorTextGeneration")(fu
     },
   );
 
-  return TextGenerationOperations.fromRunner(
-    "CursorTextGeneration",
-    TextGenerationOperations.withoutInvestigation("Cursor", runCursorJson),
-  );
+  return TextGenerationOperations.fromRunner("CursorTextGeneration", runCursorJson);
 });

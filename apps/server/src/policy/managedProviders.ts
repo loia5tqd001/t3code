@@ -414,9 +414,6 @@ export function makeManagedProviders(
       )
         ? settings.sourceControlWriterModelSelection
         : null,
-      reviewGuideModelSelection: allowedSelection(settings, settings.reviewGuideModelSelection)
-        ? settings.reviewGuideModelSelection
-        : null,
     };
     cache.set(settings, result);
     return result;

@@ -26,7 +26,6 @@ export function PullRequestComposer({
   onCommentAction,
   onCommented,
   onReviewSubmitted,
-  openReviewRequest,
 }: {
   environmentId: EnvironmentId;
   reference: PullRequestRef;
@@ -38,7 +37,6 @@ export function PullRequestComposer({
   ) => Promise<{ readonly commentPosted: boolean }>;
   onCommented: () => void;
   onReviewSubmitted: () => void;
-  openReviewRequest?: number | undefined;
 }) {
   const gt = useGT();
   const term = changeRequestTermKind(sourceControlClients.get(detail.provider).changeRequest);
@@ -55,13 +53,6 @@ export function PullRequestComposer({
     (store) => (store.summaries[reviewKey] ?? "").trim().length > 0,
   );
   const reviewStarted = pendingComments.length > 0 || summaryStarted;
-  const [answeredOpenRequest, setAnsweredOpenRequest] = useState(openReviewRequest);
-  if (openReviewRequest !== answeredOpenRequest) {
-    setAnsweredOpenRequest(openReviewRequest);
-    setRequestedMode("review");
-    setOpen(true);
-  }
-
   const canComment = detail.capabilities.comment && detail.viewerPermissions.comment;
   const verdicts = detail.capabilities.review.verdicts.filter((verdict) =>
     detail.viewerPermissions.verdicts.includes(verdict),

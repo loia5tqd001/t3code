@@ -26,7 +26,6 @@ export type SettingsPath =
   | "/settings/chat"
   | "/settings/diffs"
   | "/settings/keybindings"
-  | "/settings/snap-shot"
   | "/settings/providers"
   | "/settings/threads"
   | "/settings/browser"
@@ -105,7 +104,6 @@ export const SETTINGS_SECTION_LABELS: Readonly<Record<SettingsPath, string>> = {
   "/settings/chat": msg("Chat"),
   "/settings/diffs": msg("Diffs & pull requests"),
   "/settings/keybindings": msg("Keybindings"),
-  "/settings/snap-shot": msg("SnapShots"),
   "/settings/providers": msg("Providers"),
   "/settings/threads": msg("Threads"),
   "/settings/browser": msg("Browser"),
@@ -151,7 +149,6 @@ const ALL_SETTINGS_NAV_GROUPS: ReadonlyArray<SettingsNavGroup> = [
       "/settings/diffs",
       "/settings/keybindings",
       "/settings/voice",
-      "/settings/snap-shot",
     ],
   },
   {
@@ -1021,45 +1018,6 @@ export const SETTINGS_SEARCH_ITEMS = [
   },
   ...KEYBINDING_SEARCH_ITEMS,
   {
-    id: "snap-shot-enabled",
-    title: msg("SnapShots"),
-    searchTerms: [msg("window capture screenshot")],
-    to: "/settings/snap-shot",
-  },
-  {
-    id: "snap-shot-accessibility",
-    title: msg("Include app text"),
-    to: "/settings/snap-shot",
-    targetId: "snap-shot-enabled",
-    searchTerms: [
-      msg("capture accessibility data text UI structure elements privacy omit agent context"),
-    ],
-  },
-  {
-    id: "snap-shot-shortcut",
-    title: msg("Capture shortcut"),
-    to: "/settings/snap-shot",
-    targetId: "snap-shot-enabled",
-  },
-  {
-    id: "snap-shot-sound",
-    title: msg("Capture sound"),
-    to: "/settings/snap-shot",
-    targetId: "snap-shot-enabled",
-  },
-  {
-    id: "snap-shot-flash",
-    title: msg("Capture flash"),
-    to: "/settings/snap-shot",
-    targetId: "snap-shot-enabled",
-  },
-  {
-    id: "snap-shot-animations",
-    title: msg("Capture animations"),
-    to: "/settings/snap-shot",
-    targetId: "snap-shot-enabled",
-  },
-  {
     id: "providers",
     title: msg("Providers"),
     to: "/settings/providers",
@@ -1307,32 +1265,6 @@ export const SETTINGS_SEARCH_ITEMS = [
     scope: "project-defaults",
   },
   {
-    id: "review-guides",
-    title: msg("Review guides (beta)"),
-    to: "/settings/source-control",
-    searchTerms: [msg("pull request pr guided review guide tour beta experimental")],
-    environmentOnly: true,
-  },
-  {
-    id: "review-guide-model",
-    title: msg("Review guide model"),
-    to: "/settings/source-control",
-    // Hidden until review guides are on, so a search lands on the switch that shows it.
-    targetId: "review-guides",
-    searchTerms: [msg("pull request pr guided review guide brief maintainer")],
-    environmentOnly: true,
-    scope: "project-defaults",
-  },
-  {
-    id: "review-guide-instructions",
-    title: msg("Review guide instructions"),
-    to: "/settings/source-control",
-    targetId: "review-guides",
-    searchTerms: [msg("pull request pr guided review guide preferences taste prompt custom")],
-    environmentOnly: true,
-    scope: "project-defaults",
-  },
-  {
     id: "project-actions",
     title: msg("Actions"),
     to: "/settings/projects",
@@ -1521,7 +1453,6 @@ const SETTINGS_CATEGORY_SCOPES: Readonly<Record<SettingsPath, SettingsSearchScop
   "/settings/appearance": null,
   "/settings/chat": null,
   "/settings/diffs": null,
-  "/settings/snap-shot": null,
   "/settings/keybindings": null,
   "/settings/providers": null,
   "/settings/threads": null,

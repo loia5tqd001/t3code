@@ -15,9 +15,6 @@ import { T, useGT, useMessages, Var } from "gt-react-native";
 import { AppActivityIndicator } from "../../components/ui/AppActivityIndicator";
 import { Chip } from "../../components/ui/Chip";
 import { pullRequestTabOffset } from "./pullRequestTabScroll";
-import { guideFocusedRows, type GuideDiffFocus } from "./guide/guideDiffFocus";
-import { PullRequestGuideContent } from "./guide/PullRequestGuideScreen";
-import { useReviewGuidesEnabled } from "./guide/useReviewGuide";
 import { filterPullRequestActivity, type ActivityFilter } from "./pullRequestActivityFilter";
 import { PullRequestActivityFilters } from "./PullRequestActivityFilters";
 import { usePullRequestActivityFilter } from "./usePullRequestActivityFilter";
@@ -400,7 +397,7 @@ export function PullRequestRouteScreen({ route }: StaticScreenProps<PullRequestP
   const params = route.params;
   usePullRequestEnvironmentFallback(params);
   const connected = usePullRequestConnected(params.environmentId);
-  const [chosenSection, setSection] = useState<"overview" | "activity" | "guide">(() => {
+  const [chosenSection, setSection] = useState<"overview" | "activity">(() => {
     const kind = parsePullRequestAnchor(params.navigationUrl)?.kind;
     return kind === "timeline" || kind === "commits" ? "activity" : "overview";
   });
@@ -408,18 +405,11 @@ export function PullRequestRouteScreen({ route }: StaticScreenProps<PullRequestP
   const [listAnimationsReady, setListAnimationsReady] = useState(false);
   const [descriptionExpanded, setDescriptionExpanded] = useState(false);
   const filesContent = usePullRequestFilesSection(params);
-  const guidesEnabled = useReviewGuidesEnabled(params);
-  // The guide tab goes away while guides are off and overview stands in. The pick is kept, so
-  // guides coming back (a settings reload, a reconnect) return to the guide the user chose.
-  const shown = (tab: typeof chosenSection) =>
-    !guidesEnabled && tab === "guide" ? "overview" : tab;
-  const section = shown(chosenSection);
+  const section = chosenSection;
   const activity = usePullRequestActivityFilter(parsePullRequestAnchor(params.navigationUrl)?.kind);
   const activityFilter = activity.filter;
   const activityContent = usePullRequestActivityRows(params, activityFilter);
   const scrollOffsets = useRef<Record<string, number>>({});
-  // The offset of the tab last shown, and which tab that was: a tab standing in for a hidden guide
-  // has its own offset, which only its next scroll would record here.
   const currentScrollOffset = useRef<{ tab: typeof section; offset: number }>({
     tab: "overview",
     offset: -contentTopInset,
@@ -436,13 +426,12 @@ export function PullRequestRouteScreen({ route }: StaticScreenProps<PullRequestP
     };
     return {
       overview: listRef("overview"),
-      guide: listRef("guide"),
       activity: listRef("activity"),
     };
   });
   const selectSection = (next: typeof section) => {
     if (next === section) return;
-    const from = shown(requestedSection.current);
+    const from = requestedSection.current;
     const current =
       currentScrollOffset.current.tab === from
         ? currentScrollOffset.current.offset
@@ -566,7 +555,6 @@ export function PullRequestRouteScreen({ route }: StaticScreenProps<PullRequestP
     );
   const stack = usePullRequestStack(params, pr);
   const refreshActivity = useAtomRefresh(composerPullRequests.activity(requestTarget(params)));
-  const refreshGuide = useAtomRefresh(composerPullRequests.reviewGuide(requestTarget(params)));
   const registry = use(RegistryContext);
   const refresh = () =>
     pullRefresh.onRefresh(async (signal) => {
@@ -578,7 +566,6 @@ export function PullRequestRouteScreen({ route }: StaticScreenProps<PullRequestP
         { reportFailure: false },
       );
       if (signal.aborted) return;
-      if (guidesEnabled) refreshGuide();
       stack.refresh();
       refreshActivity();
       filesContent.refresh();
@@ -727,245 +714,224 @@ export function PullRequestRouteScreen({ route }: StaticScreenProps<PullRequestP
           menus={verticalControls ? undefined : [pullRequestMenu]}
         />
         <ScreenContent onLayout={(event) => setViewportHeight(event.nativeEvent.layout.height)}>
-          {(["overview", "guide", "activity"] as const)
-            .filter((tab) => tab !== "guide" || guidesEnabled)
-            .map((tab) => (
-              <View
-                key={tab}
-                style={[StyleSheet.absoluteFill, { opacity: section === tab ? 1 : 0 }]}
-                pointerEvents={section === tab ? "auto" : "none"}
-                accessibilityElementsHidden={section !== tab}
-                importantForAccessibility={section === tab ? "auto" : "no-hide-descendants"}
-              >
-                <AnimatedLegendList
-                  ref={listRefs[tab]}
-                  // The scroll view owns its resting offset. LegendList keeps the first
-                  // initialScrollOffset it gets, and the first render has the window's top
-                  // inset (0 on the folded iPhone Duo), not the header's.
-                  onScrollBeginDrag={
-                    tab === "activity"
-                      ? () => {
-                          heldActivityRow.current = null;
-                        }
-                      : undefined
+          {(["overview", "activity"] as const).map((tab) => (
+            <View
+              key={tab}
+              style={[StyleSheet.absoluteFill, { opacity: section === tab ? 1 : 0 }]}
+              pointerEvents={section === tab ? "auto" : "none"}
+              accessibilityElementsHidden={section !== tab}
+              importantForAccessibility={section === tab ? "auto" : "no-hide-descendants"}
+            >
+              <AnimatedLegendList
+                ref={listRefs[tab]}
+                // The scroll view owns its resting offset. LegendList keeps the first
+                // initialScrollOffset it gets, and the first render has the window's top
+                // inset (0 on the folded iPhone Duo), not the header's.
+                onScrollBeginDrag={
+                  tab === "activity"
+                    ? () => {
+                        heldActivityRow.current = null;
+                      }
+                    : undefined
+                }
+                onScroll={(event) => {
+                  const offset = event.nativeEvent.contentOffset.y;
+                  scrollOffsets.current[tab] = offset;
+                  if (requestedSection.current === tab)
+                    currentScrollOffset.current = { tab, offset };
+                }}
+                className="flex-1"
+                renderScrollComponent={Platform.OS === "ios" ? NativeScrollView : undefined}
+                contentInsetAdjustmentBehavior="never"
+                contentInset={
+                  Platform.OS === "ios"
+                    ? { top: contentTopInset, bottom: contentBottomInset }
+                    : undefined
+                }
+                refreshControl={
+                  <RefreshControl
+                    refreshing={section === tab && pullRefresh.refreshing}
+                    onRefresh={refresh}
+                  />
+                }
+                alwaysBounceVertical
+                scrollsToTop={section === tab}
+                onItemSizeChanged={({ itemKey }) => {
+                  const held = heldActivityRow.current;
+                  if (tab === "activity" && held !== null) {
+                    // A filter or refresh that moved the row ends the hold.
+                    if (held !== activityTargetIndex + 1) heldActivityRow.current = null;
+                    else positionActivityRow(held);
+                    return;
                   }
-                  onScroll={(event) => {
-                    const offset = event.nativeEvent.contentOffset.y;
-                    scrollOffsets.current[tab] = offset;
-                    if (shown(requestedSection.current) === tab)
-                      currentScrollOffset.current = { tab, offset };
-                  }}
-                  className="flex-1"
-                  renderScrollComponent={Platform.OS === "ios" ? NativeScrollView : undefined}
-                  contentInsetAdjustmentBehavior="never"
-                  contentInset={
-                    Platform.OS === "ios"
-                      ? { top: contentTopInset, bottom: contentBottomInset }
-                      : undefined
-                  }
-                  refreshControl={
-                    <RefreshControl
-                      refreshing={section === tab && pullRefresh.refreshing}
-                      onRefresh={refresh}
-                    />
-                  }
-                  alwaysBounceVertical
-                  scrollsToTop={section === tab}
-                  onItemSizeChanged={({ itemKey }) => {
-                    const held = heldActivityRow.current;
-                    if (tab === "activity" && held !== null) {
-                      // A filter or refresh that moved the row ends the hold.
-                      if (held !== activityTargetIndex + 1) heldActivityRow.current = null;
-                      else positionActivityRow(held);
-                      return;
-                    }
-                    if (
-                      tab !== "overview" ||
-                      section !== "overview" ||
-                      itemKey !== "overview:body" ||
-                      !pendingDescriptionJump.current
-                    )
-                      return;
-                    pendingDescriptionJump.current = false;
-                    scrollViews.current.overview?.scrollToIndex({
-                      index: 0,
-                      viewPosition: 0,
-                      viewOffset: -descriptionY.current,
-                      animated: false,
-                    });
-                  }}
-                  contentContainerStyle={{
-                    paddingHorizontal: 16,
-                    paddingTop: 8,
-                    paddingBottom: 24 + (Platform.OS === "android" ? toolbarHeight : 0),
-                    // Short tabs must still be tall enough to preserve the collapsed header.
-                    minHeight: Math.max(
-                      0,
-                      viewportHeight + headerHeight - contentTopInset - contentBottomInset,
-                    ),
-                  }}
-                  data={[
-                    {
-                      key: `${tab}:body`,
-                      content: (
-                        <View>
-                          {tab === "overview" && identity ? (
-                            <View>
-                              <SourceControlAppAccessNotice
-                                environmentId={params.environmentId}
-                                provider={identity.provider}
-                                host={params.host}
-                                repository={params.repository}
-                              />
-                              {pr ? (
-                                <PullRequestOverview
-                                  pr={pr}
-                                  description={description}
-                                  params={params}
-                                  stack={stack}
-                                  descriptionExpanded={descriptionExpanded}
-                                  onDescriptionExpandedChange={setDescriptionExpanded}
-                                  onDescriptionLayout={(y) => {
-                                    descriptionY.current = y;
-                                  }}
-                                  onDescriptionCollapse={() => {
-                                    pendingDescriptionJump.current = true;
-                                  }}
-                                />
-                              ) : summary ? (
-                                <PullRequestOverviewLoading
-                                  summary={summary}
-                                  params={params}
-                                  stack={stack}
-                                />
-                              ) : null}
-                              <View
-                                className="mt-8 border-t border-border-subtle pt-3"
-                                onLayout={(event) => {
-                                  filesY.current = event.nativeEvent.layout.y;
-                                  if (pendingFilesJump.current) {
-                                    requestAnimationFrame(() => {
-                                      if (shown(requestedSection.current) === "overview")
-                                        jumpToFiles();
-                                    });
-                                  }
+                  if (
+                    tab !== "overview" ||
+                    section !== "overview" ||
+                    itemKey !== "overview:body" ||
+                    !pendingDescriptionJump.current
+                  )
+                    return;
+                  pendingDescriptionJump.current = false;
+                  scrollViews.current.overview?.scrollToIndex({
+                    index: 0,
+                    viewPosition: 0,
+                    viewOffset: -descriptionY.current,
+                    animated: false,
+                  });
+                }}
+                contentContainerStyle={{
+                  paddingHorizontal: 16,
+                  paddingTop: 8,
+                  paddingBottom: 24 + (Platform.OS === "android" ? toolbarHeight : 0),
+                  // Short tabs must still be tall enough to preserve the collapsed header.
+                  minHeight: Math.max(
+                    0,
+                    viewportHeight + headerHeight - contentTopInset - contentBottomInset,
+                  ),
+                }}
+                data={[
+                  {
+                    key: `${tab}:body`,
+                    content: (
+                      <View>
+                        {tab === "overview" && identity ? (
+                          <View>
+                            <SourceControlAppAccessNotice
+                              environmentId={params.environmentId}
+                              provider={identity.provider}
+                              host={params.host}
+                              repository={params.repository}
+                            />
+                            {pr ? (
+                              <PullRequestOverview
+                                pr={pr}
+                                description={description}
+                                params={params}
+                                stack={stack}
+                                descriptionExpanded={descriptionExpanded}
+                                onDescriptionExpandedChange={setDescriptionExpanded}
+                                onDescriptionLayout={(y) => {
+                                  descriptionY.current = y;
                                 }}
-                              >
-                                {filesContent.header}
-                              </View>
+                                onDescriptionCollapse={() => {
+                                  pendingDescriptionJump.current = true;
+                                }}
+                              />
+                            ) : summary ? (
+                              <PullRequestOverviewLoading
+                                summary={summary}
+                                params={params}
+                                stack={stack}
+                              />
+                            ) : null}
+                            <View
+                              className="mt-8 border-t border-border-subtle pt-3"
+                              onLayout={(event) => {
+                                filesY.current = event.nativeEvent.layout.y;
+                                if (pendingFilesJump.current) {
+                                  requestAnimationFrame(() => {
+                                    if (requestedSection.current === "overview") jumpToFiles();
+                                  });
+                                }
+                              }}
+                            >
+                              {filesContent.header}
                             </View>
-                          ) : null}
-                          {tab === "guide" ? (
-                            <PullRequestGuideContent
-                              params={params}
-                              visible={section === "guide"}
-                            />
-                          ) : null}
-                          {tab === "activity" ? (
-                            <PullRequestActivityFilters
-                              value={activityFilter}
-                              onChange={activity.setFilter}
-                              hiddenCount={tabContent.hiddenCount}
-                            />
-                          ) : null}
-                          {tab === "activity" ? (
-                            <PullRequestReadStatus
-                              pending={tabContent.pending}
-                              error={tabContent.error}
-                              terminology={terminology}
-                            />
-                          ) : null}
-                        </View>
-                      ),
-                    },
-                    ...(tab === "overview"
-                      ? identity
-                        ? filesContent.rows
-                        : []
-                      : tab === "activity"
-                        ? tabContent.rows
-                        : []
-                    ).map((row) => ({
-                      ...row,
-                      key: `${tab}:${row.key}`,
-                      content: row.content,
-                    })),
-                  ]}
-                  keyExtractor={(row) => row.key}
-                  getItemType={(row) =>
-                    row.key.endsWith(":body") ? row.key : row.key.split(":")[0]
-                  }
-                  // Animating overview fights clipped markdown and collapse scroll correction; file rows can still fade.
-                  itemLayoutAnimation={tab === "overview" ? undefined : PR_ROW_LAYOUT}
-                  onLoad={() => setListAnimationsReady(true)}
-                  renderItem={({ item }) => (
-                    <Animated.View
-                      key={item.key}
-                      entering={
-                        listAnimationsReady && !item.key.endsWith(":body")
-                          ? PR_ROW_ENTER
-                          : undefined
-                      }
-                      exiting={
-                        listAnimationsReady && !item.key.endsWith(":body") ? PR_ROW_EXIT : undefined
-                      }
-                    >
-                      <PullRequestMediaVisibleContext value={section === tab}>
-                        {item.content}
-                      </PullRequestMediaVisibleContext>
-                    </Animated.View>
-                  )}
-                  recycleItems={false}
-                  estimatedItemSize={tab === "overview" ? 64 : 220}
-                  maintainVisibleContentPosition={false}
-                  ListHeaderComponent={
-                    <>
-                      <PullRequestReadStatus
-                        pending={result.isPending && !identity}
-                        error={result.error}
-                        terminology={terminology}
-                      />
-                      {identity ? (
-                        <View
-                          className="gap-5 pb-5"
-                          onLayout={(event) => {
-                            bodyY.current = event.nativeEvent.layout.height;
-                            setHeaderHeight(event.nativeEvent.layout.height);
-                          }}
-                        >
-                          <PullRequestIdentity pr={identity} params={params} />
-                          {/* UIKit draws the tapped control's glass lens outside the hidden
+                          </View>
+                        ) : null}
+                        {tab === "activity" ? (
+                          <PullRequestActivityFilters
+                            value={activityFilter}
+                            onChange={activity.setFilter}
+                            hiddenCount={tabContent.hiddenCount}
+                          />
+                        ) : null}
+                        {tab === "activity" ? (
+                          <PullRequestReadStatus
+                            pending={tabContent.pending}
+                            error={tabContent.error}
+                            terminology={terminology}
+                          />
+                        ) : null}
+                      </View>
+                    ),
+                  },
+                  ...(tab === "overview"
+                    ? identity
+                      ? filesContent.rows
+                      : []
+                    : tab === "activity"
+                      ? tabContent.rows
+                      : []
+                  ).map((row) => ({
+                    ...row,
+                    key: `${tab}:${row.key}`,
+                    content: row.content,
+                  })),
+                ]}
+                keyExtractor={(row) => row.key}
+                getItemType={(row) => (row.key.endsWith(":body") ? row.key : row.key.split(":")[0])}
+                // Animating overview fights clipped markdown and collapse scroll correction; file rows can still fade.
+                itemLayoutAnimation={tab === "overview" ? undefined : PR_ROW_LAYOUT}
+                onLoad={() => setListAnimationsReady(true)}
+                renderItem={({ item }) => (
+                  <Animated.View
+                    key={item.key}
+                    entering={
+                      listAnimationsReady && !item.key.endsWith(":body") ? PR_ROW_ENTER : undefined
+                    }
+                    exiting={
+                      listAnimationsReady && !item.key.endsWith(":body") ? PR_ROW_EXIT : undefined
+                    }
+                  >
+                    <PullRequestMediaVisibleContext value={section === tab}>
+                      {item.content}
+                    </PullRequestMediaVisibleContext>
+                  </Animated.View>
+                )}
+                recycleItems={false}
+                estimatedItemSize={tab === "overview" ? 64 : 220}
+                maintainVisibleContentPosition={false}
+                ListHeaderComponent={
+                  <>
+                    <PullRequestReadStatus
+                      pending={result.isPending && !identity}
+                      error={result.error}
+                      terminology={terminology}
+                    />
+                    {identity ? (
+                      <View
+                        className="gap-5 pb-5"
+                        onLayout={(event) => {
+                          bodyY.current = event.nativeEvent.layout.height;
+                          setHeaderHeight(event.nativeEvent.layout.height);
+                        }}
+                      >
+                        <PullRequestIdentity pr={identity} params={params} />
+                        {/* UIKit draws the tapped control's glass lens outside the hidden
                               tab's opacity, so only the visible tab mounts the control. */}
-                          {Platform.OS !== "ios" || section === tab ? (
-                            <SegmentedControl
-                              options={[
-                                { value: "overview", label: gt("Overview") },
-                                ...(guidesEnabled
-                                  ? [
-                                      {
-                                        value: "guide" as const,
-                                        label: gt("Guide", { $context: "review guide tab" }),
-                                      },
-                                    ]
-                                  : []),
-                                { value: "activity", label: gt("Activity") },
-                              ]}
-                              selected={section}
-                              onSelect={selectSection}
-                              role="tab"
-                              size="compact"
-                            />
-                          ) : (
-                            <View style={{ height: 32 }} />
-                          )}
-                        </View>
-                      ) : null}
-                    </>
-                  }
-                  ListFooterComponent={tab === "overview" ? filesContent.footer : null}
-                />
-              </View>
-            ))}
+                        {Platform.OS !== "ios" || section === tab ? (
+                          <SegmentedControl
+                            options={[
+                              { value: "overview", label: gt("Overview") },
+                              { value: "activity", label: gt("Activity") },
+                            ]}
+                            selected={section}
+                            onSelect={selectSection}
+                            role="tab"
+                            size="compact"
+                          />
+                        ) : (
+                          <View style={{ height: 32 }} />
+                        )}
+                      </View>
+                    ) : null}
+                  </>
+                }
+                ListFooterComponent={tab === "overview" ? filesContent.footer : null}
+              />
+            </View>
+          ))}
         </ScreenContent>
         <PullRequestActionToolbar
           pr={pr}
@@ -983,7 +949,6 @@ type PullRequestFileRouteProps = StaticScreenProps<
   PullRequestDiffParams & {
     readonly path: string;
     readonly replacingDraftId?: string;
-    readonly focus?: GuideDiffFocus;
   }
 >;
 
@@ -1028,10 +993,7 @@ function PullRequestFileRouteContent({ route }: PullRequestFileRouteProps) {
       ? result.parsed.files.find((file) => pullRequestDiffPathMatches(linkAnchor.digest, file.path))
           ?.path
       : undefined;
-  const filter = usePullRequestFileFilter(
-    result.parsed,
-    linkPath ?? (route.params.focus ? route.params.path : undefined),
-  );
+  const filter = usePullRequestFileFilter(result.parsed, linkPath);
   const { refresh: refreshDetail } = detail;
   useFocusEffect(refreshDetail);
   const { loadMore } = result;
@@ -1127,17 +1089,34 @@ function PullRequestFileRouteContent({ route }: PullRequestFileRouteProps) {
           row.fileId === targetFile?.id && row.change === "delete" && row.oldLineNumber === line,
       ),
     );
-  const focus =
-    route.params.focus ??
-    (range
-      ? {
-          side: range.side === "left" ? ("old" as const) : ("new" as const),
-          start: range.start,
-          end: range.end,
-          endSide: range.endSide === "left" ? ("old" as const) : ("new" as const),
-        }
-      : undefined);
-  const focusedRows = guideFocusedRows(data.rows, targetFile?.id, focus);
+  const focusedRows = (() => {
+    if (!targetFile || !range) return [];
+    const line = (row: (typeof data.rows)[number], side: "left" | "right") =>
+      side === "left" ? row.oldLineNumber : row.newLineNumber;
+    if (range.side !== range.endSide) {
+      const start = data.rows.findIndex(
+        (row) => row.fileId === targetFile.id && line(row, range.side) === range.start,
+      );
+      const end = data.rows.findIndex(
+        (row) => row.fileId === targetFile.id && line(row, range.endSide) === range.end,
+      );
+      return start < 0 || end < 0
+        ? []
+        : data.rows
+            .slice(Math.min(start, end), Math.max(start, end) + 1)
+            .filter((row) => row.fileId === targetFile.id && row.kind === "line");
+    }
+    return data.rows.filter((row) => {
+      const rowLine = line(row, range.side);
+      return (
+        row.fileId === targetFile.id &&
+        row.kind === "line" &&
+        rowLine != null &&
+        rowLine >= range.start &&
+        rowLine <= range.end
+      );
+    });
+  })();
   const focusIndex = focusedRows.length
     ? data.rows.findIndex((row) => row.id === focusedRows[0]?.id)
     : -1;
